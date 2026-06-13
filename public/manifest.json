@@ -1,0 +1,12 @@
+{
+  "name": "Casa Points",
+  "short_name": "Casa Points",
+  "description": "Dividetevi i lavori di casa, raccogliete punti, festeggiate insieme",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF7ED",
+  "theme_color": "#FF6B6B",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
