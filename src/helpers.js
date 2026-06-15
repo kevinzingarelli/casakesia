@@ -236,3 +236,161 @@ export function achievementContext(log, choresById, userId, otherId) {
 export function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+// ============================================================
+// FUNZIONI AGGIUNTIVE (coppia, titoli, salute casa, trend, stagioni)
+// ============================================================
+
+// Traguardi di COPPIA (collettivi)
+export const COUPLE_MILESTONES = [
+  { id: 'cm_jobs50', emoji: '🤝', title: '50 lavori insieme', desc: 'Completate 50 lavori in totale come coppia', check: (c) => c.totalJobs >= 50 },
+  { id: 'cm_jobs100', emoji: '💞', title: '100 lavori insieme', desc: '100 lavori completati insieme', check: (c) => c.totalJobs >= 100 },
+  { id: 'cm_jobs250', emoji: '🏠', title: 'Squadra di casa', desc: '250 lavori insieme', check: (c) => c.totalJobs >= 250 },
+  { id: 'cm_jobs500', emoji: '🏰', title: 'Dinastia domestica', desc: '500 lavori insieme', check: (c) => c.totalJobs >= 500 },
+  { id: 'cm_pts1000', emoji: '💎', title: '1000 punti di coppia', desc: '1000 punti totali combinati', check: (c) => c.totalPoints >= 1000 },
+  { id: 'cm_pts3000', emoji: '👑', title: 'Impero domestico', desc: '3000 punti combinati', check: (c) => c.totalPoints >= 3000 },
+  { id: 'cm_days7', emoji: '🔥', title: 'Settimana di coppia', desc: 'Entrambi attivi per 7 giorni', check: (c) => c.bothActiveStreak >= 7 },
+  { id: 'cm_balance', emoji: '⚖️', title: 'Equilibrio perfetto', desc: 'Differenza lavori sotto il 5% (min. 40 lavori)', check: (c) => c.totalJobs >= 40 && c.balanceDiff <= 5 },
+];
+
+export function coupleContext(log, choresById, users) {
+  const totalJobs = log.length;
+  const totalPoints = log.reduce((s, e) => s + pointsForEntry(e, choresById), 0);
+  // giorni in cui ENTRAMBI hanno fatto qualcosa, consecutivi da oggi
+  const dayHasUser = {};
+  users.forEach((u) => { dayHasUser[u.id] = new Set(log.filter((e) => e.userId === u.id).map((e) => e.date)); });
+  let bothActiveStreak = 0;
+  let cursor = new Date();
+  while (users.length >= 2) {
+    const key = todayStr(cursor);
+    const allActive = users.every((u) => dayHasUser[u.id].has(key));
+    if (allActive) { bothActiveStreak += 1; cursor.setDate(cursor.getDate() - 1); }
+    else {
+      if (key === todayStr() && bothActiveStreak === 0) { cursor.setDate(cursor.getDate() - 1); continue; }
+      break;
+    }
+    if (bothActiveStreak > 400) break;
+  }
+  // bilanciamento
+  const counts = users.map((u) => log.filter((e) => e.userId === u.id).length);
+  const tot = counts.reduce((a, b) => a + b, 0) || 1;
+  const pcts = counts.map((c) => (c / tot) * 100);
+  const balanceDiff = pcts.length >= 2 ? Math.abs(pcts[0] - pcts[1]) : 100;
+  return { totalJobs, totalPoints, bothActiveStreak, balanceDiff };
+}
+
+// Titolo personalizzato in base alla categoria dominante dell'utente
+export function userTitle(log, choresById, userId) {
+  const userLog = log.filter((e) => e.userId === userId);
+  if (userLog.length < 5) return null;
+  const byCat = {};
+  userLog.forEach((e) => { const c = choreNameForEntry(e, choresById).category; byCat[c] = (byCat[c] || 0) + 1; });
+  let topCat = null, topN = 0;
+  Object.entries(byCat).forEach(([c, n]) => { if (n > topN) { topN = n; topCat = c; } });
+  const titles = {
+    Cucina: { title: 'Re della cucina', emoji: '👨‍🍳' },
+    Pulizia: { title: 'Maestro del pulito', emoji: '✨' },
+    Bucato: { title: 'Signore del bucato', emoji: '🧺' },
+    Gestione: { title: 'Stratega di casa', emoji: '📊' },
+    Esterno: { title: 'Guardiano del verde', emoji: '🪴' },
+  };
+  return titles[topCat] || null;
+}
+
+// Salute della casa: basata su frequenza lavori chiave nelle ultime 48h
+export function houseHealth(log, choresById) {
+  const now = Date.now();
+  const h48 = now - 48 * 3600 * 1000;
+  const recent = log.filter((e) => new Date(e.timestamp).getTime() >= h48);
+  const recentCount = recent.length;
+  // copertura categorie nelle ultime 48h
+  const cats = new Set(recent.map((e) => choreNameForEntry(e, choresById).category));
+  let score = 0;
+  score += Math.min(50, recentCount * 8); // attività
+  score += Math.min(50, cats.size * 12); // varietà
+  let status, color, emoji, label;
+  if (score >= 70) { status = 'ottima'; color = '#06D6A0'; emoji = '🌿'; label = 'La casa è in ottime condizioni!'; }
+  else if (score >= 35) { status = 'discreta'; color = '#FFD166'; emoji = '🌤️'; label = 'La casa è in condizioni discrete'; }
+  else { status = 'da_curare'; color = '#FF6B6B'; emoji = '🏚️'; label = 'La casa ha bisogno di attenzioni'; }
+  return { score: Math.round(score), status, color, emoji, label };
+}
+
+// Trend: confronto punti periodo corrente vs precedente
+export function computeTrend(log, choresById, userId, days = 7) {
+  const now = new Date();
+  const startCur = new Date(now); startCur.setDate(startCur.getDate() - days); startCur.setHours(0, 0, 0, 0);
+  const startPrev = new Date(startCur); startPrev.setDate(startPrev.getDate() - days);
+  let cur = 0, prev = 0;
+  log.filter((e) => e.userId === userId).forEach((e) => {
+    const ts = new Date(e.timestamp);
+    if (ts >= startCur) cur += pointsForEntry(e, choresById);
+    else if (ts >= startPrev && ts < startCur) prev += pointsForEntry(e, choresById);
+  });
+  let pct = 0;
+  if (prev === 0 && cur > 0) pct = 100;
+  else if (prev > 0) pct = Math.round(((cur - prev) / prev) * 100);
+  return { cur, prev, pct };
+}
+
+// Distribuzione per fascia oraria
+export function hourDistribution(log, userId) {
+  const slots = { Mattina: 0, Pomeriggio: 0, Sera: 0, Notte: 0 };
+  log.filter((e) => e.userId === userId).forEach((e) => {
+    const h = new Date(e.timestamp).getHours();
+    if (h >= 6 && h < 12) slots.Mattina++;
+    else if (h >= 12 && h < 18) slots.Pomeriggio++;
+    else if (h >= 18 && h < 23) slots.Sera++;
+    else slots.Notte++;
+  });
+  return slots;
+}
+
+// Radar per categoria (conteggio per categoria, per utente)
+export function categoryRadar(log, choresById, users) {
+  return CATEGORIES.map((cat) => {
+    const row = { category: cat };
+    users.forEach((u) => {
+      row[u.name] = log.filter((e) => e.userId === u.id && choreNameForEntry(e, choresById).category === cat).length;
+    });
+    return row;
+  });
+}
+
+// Stagione corrente (per badge e tema)
+export function currentSeason(d = new Date()) {
+  const m = d.getMonth();
+  if (m >= 2 && m <= 4) return { id: 'spring', name: 'Primavera', emoji: '🌸', colors: { coral: '#FF8FAB', accent: '#7CCB7B' } };
+  if (m >= 5 && m <= 7) return { id: 'summer', name: 'Estate', emoji: '☀️', colors: { coral: '#FF9F45', accent: '#22D3EE' } };
+  if (m >= 8 && m <= 10) return { id: 'autumn', name: 'Autunno', emoji: '🍂', colors: { coral: '#E07856', accent: '#FFB627' } };
+  return { id: 'winter', name: 'Inverno', emoji: '❄️', colors: { coral: '#5B8DEF', accent: '#A78BFA' } };
+}
+
+// Messaggio motivazionale basato sui dati reali dell'utente
+export function motivationalMessage(log, choresById, userId, otherId, users) {
+  const me = users.find((u) => u.id === userId);
+  const streak = computeStreak(log, userId);
+  const myTotal = log.filter((e) => e.userId === userId).reduce((s, e) => s + pointsForEntry(e, choresById), 0);
+  const otherTotal = otherId ? log.filter((e) => e.userId === otherId).reduce((s, e) => s + pointsForEntry(e, choresById), 0) : 0;
+  const todayCount = log.filter((e) => e.userId === userId && e.date === todayStr()).length;
+  const lvl = getLevel(myTotal);
+
+  const msgs = [];
+  if (todayCount === 0) msgs.push("Non hai ancora fatto nulla oggi. Inizia con un piccolo lavoro! 💪");
+  if (streak >= 3) msgs.push(`Sei in serie da ${streak} giorni! Non spezzarla ora 🔥`);
+  if (otherId && myTotal < otherTotal) {
+    const diff = otherTotal - myTotal;
+    msgs.push(`Sei indietro di ${diff} punti. Tempo di recuperare! 😏`);
+  } else if (otherId && myTotal > otherTotal && otherTotal > 0) {
+    msgs.push(`Sei in testa! Mantieni il vantaggio 👑`);
+  }
+  if (lvl.next) {
+    const toNext = lvl.next.min - myTotal;
+    if (toNext <= 30 && toNext > 0) msgs.push(`Ti mancano solo ${toNext} punti per "${lvl.next.title}" ${lvl.next.emoji}`);
+  }
+  if (todayCount >= 3) msgs.push(`${todayCount} lavori oggi! Sei inarrestabile 🚀`);
+  if (msgs.length === 0) msgs.push("Ogni piccolo gesto rende la casa migliore ✨");
+
+  // sceglie un messaggio in modo deterministico per la giornata
+  const seed = parseInt(todayStr().split('-').join(''), 10) + userId.length;
+  return msgs[seed % msgs.length];
+}
