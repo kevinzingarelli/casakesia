@@ -3,6 +3,7 @@ import {
   Home, ListChecks, History, BarChart3, Settings, Plus, Minus, Flame, Trophy, Sparkles,
   Trash2, Check, Pencil, X, RotateCcw, Crown, Volume2, VolumeX, Moon, Sun, Download,
   Calendar, Heart, Target, AlertTriangle, Palmtree, Share2, LayoutGrid, Clock, Zap,
+  Search, Gift, Bell, Repeat, Bookmark, Sparkle as SparkleIcon, Star,
 } from 'lucide-react';
 import { supabase, TABLE, DATA_ROW_ID } from './supabaseClient';
 import {
@@ -11,19 +12,23 @@ import {
   todayStr, formatDate, formatTime, getLevel, computeStreak,
   pointsForEntry, choreNameForEntry, achievementContext, uid, startOfWeek,
   houseHealth, motivationalMessage, currentSeason,
+  houseState, recurringStatus, rewardAchieved, recentChores, groupByDay, computeWeekWins,
 } from './helpers';
 import { playCompletionSound, playAchievementSound, playLevelUpSound, vibrate } from './sounds';
-import { quoteOfTheWeek } from './quotes';
+import { quoteOfTheDay } from './quotes';
 import StatsView from './StatsView';
 import WidgetScreen from './WidgetScreen';
 import ShareCard from './ShareCard';
+import HouseSvg from './HouseSvg';
+import StreakView from './StreakView';
 
-const DEFAULT_DATA = { users: DEFAULT_USERS, chores: DEFAULT_CHORES, log: [], version: 3, coupleGoal: null, vacations: {}, penaltiesOn: false, customCategories: [] };
+const DEFAULT_DATA = { users: DEFAULT_USERS, chores: DEFAULT_CHORES, log: [], version: 6, coupleGoal: null, vacations: {}, penaltiesOn: false, customCategories: [], categories: [...CATEGORIES], rewards: [], savedQuotes: [], excused: {} };
 
 const LS_IDENTITY = 'casa-points-identity';
 const LS_SOUND = 'casa-points-sound';
 const LS_DARK = 'casa-points-dark';
 const LS_SEASONAL = 'casa-points-seasonal';
+const LS_STYLE = 'casa-points-style';
 
 function loadLS(key, fallback) {
   try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; }
@@ -38,6 +43,7 @@ export default function App() {
   const [pickerCount, setPickerCount] = useState(1);
   const [pickerDate, setPickerDate] = useState(todayStr());      // retrodatazione
   const [pickerDedicate, setPickerDedicate] = useState(false);   // dedica
+  const [pickerExtras, setPickerExtras] = useState([]);          // extra opzionali selezionati
   const [confetti, setConfetti] = useState(null);
   const [dedicationToast, setDedicationToast] = useState(null);
   const [historyFilter, setHistoryFilter] = useState('all');
@@ -53,11 +59,17 @@ export default function App() {
   const [seasonal, setSeasonal] = useState(() => loadLS(LS_SEASONAL, true));
   const [showShare, setShowShare] = useState(false);
   const [showGoalEdit, setShowGoalEdit] = useState(false);
+  const [style, setStyle] = useState(() => loadLS(LS_STYLE, 'pop'));
+  const [choreSearch, setChoreSearch] = useState('');
+  const [choreCat, setChoreCat] = useState('all');
+  const [showRewards, setShowRewards] = useState(false);
+  const [showSavedQuotes, setShowSavedQuotes] = useState(false);
+  const [removingIds, setRemovingIds] = useState([]);
   const dataRef = useRef(null);
   const saveTimer = useRef(null);
 
   const season = currentSeason();
-  const baseTheme = theme(dark);
+  const baseTheme = theme(dark, style);
   // Tema stagionale: sostituisce coral/accent se attivo
   const t = seasonal ? { ...baseTheme, coral: season.colors.coral, lavender: season.colors.accent } : baseTheme;
 
@@ -70,6 +82,7 @@ export default function App() {
   useEffect(() => { saveLS(LS_SOUND, soundOn); }, [soundOn]);
   useEffect(() => { saveLS(LS_IDENTITY, identity); }, [identity]);
   useEffect(() => { saveLS(LS_SEASONAL, seasonal); }, [seasonal]);
+  useEffect(() => { saveLS(LS_STYLE, style); }, [style]);
 
   const choresById = useMemo(() => {
     const m = {};
@@ -78,8 +91,8 @@ export default function App() {
   }, [data]);
 
   const allCategories = useMemo(() => {
-    const custom = (data?.customCategories || []);
-    return [...CATEGORIES, ...custom];
+    if (data?.categories && data.categories.length) return data.categories;
+    return [...CATEGORIES, ...(data?.customCategories || [])];
   }, [data]);
 
   useEffect(() => {
@@ -101,6 +114,22 @@ export default function App() {
           value.penaltiesOn = value.penaltiesOn || false;
           value.customCategories = value.customCategories || [];
           value.version = 3;
+        }
+        if (value.version < 4) {
+          value.rewards = value.rewards || [];
+          value.savedQuotes = value.savedQuotes || [];
+          value.version = 4;
+        }
+        if (value.version < 5) {
+          value.excused = value.excused || {};
+          value.version = 5;
+        }
+        if (value.version < 6) {
+          // Unifico le categorie: base + eventuali personalizzate diventano un'unica lista modificabile
+          const base = ['Cucina', 'Pulizia', 'Bucato', 'Gestione', 'Esterno'];
+          const custom = value.customCategories || [];
+          value.categories = Array.from(new Set([...base, ...custom]));
+          value.version = 6;
         }
         dataRef.current = value;
         setData(value);
@@ -144,7 +173,7 @@ export default function App() {
   const streaks = useMemo(() => {
     if (!data) return {};
     const s = {};
-    data.users.forEach((u) => { s[u.id] = computeStreak(data.log, u.id); });
+    data.users.forEach((u) => { s[u.id] = computeStreak(data.log, u.id, data.excused || {}); });
     return s;
   }, [data]);
 
@@ -156,15 +185,21 @@ export default function App() {
   const otherUser = me && data ? data.users.find((u) => u.id !== me.id) : null;
 
   // Registrazione con retrodatazione + dedica + conteggio multiplo
-  const logChore = (chore, user, count = 1, dateStr = todayStr(), dedicate = false) => {
+  const logChore = (chore, user, count = 1, dateStr = todayStr(), dedicate = false, extras = []) => {
     const isToday = dateStr === todayStr();
     const baseTime = isToday ? new Date() : new Date(`${dateStr}T12:00:00`);
+    // Extra selezionati: salvo gli id + uno snapshot (per il ricalcolo storico anche se poi cambiano)
+    const choreExtras = chore.extras || [];
+    const selectedExtras = extras.filter((id) => choreExtras.some((e) => e.id === id));
+    const extrasSnapshot = choreExtras.filter((e) => selectedExtras.includes(e.id)).map((e) => ({ id: e.id, name: e.name, points: e.points }));
+    const extrasPoints = extrasSnapshot.reduce((s, e) => s + e.points, 0);
     const entries = [];
     for (let i = 0; i < count; i++) {
       const ts = new Date(baseTime.getTime() + i * 1000);
       entries.push({
         id: uid(), userId: user.id, choreId: chore.id,
         snapshotPoints: chore.points, snapshotName: chore.name, snapshotEmoji: chore.emoji, snapshotCategory: chore.category,
+        selectedExtras, extrasSnapshot,
         timestamp: ts.toISOString(), date: dateStr,
         dedicatedTo: dedicate && otherUser ? otherUser.id : null,
       });
@@ -182,9 +217,9 @@ export default function App() {
     const leveledUp = newLevel.title !== prevLevel.title;
 
     save(next);
-    setPickerChore(null); setPickerCount(1); setPickerDate(todayStr()); setPickerDedicate(false);
+    setPickerChore(null); setPickerCount(1); setPickerDate(todayStr()); setPickerDedicate(false); setPickerExtras([]);
 
-    const pts = chore.points * count;
+    const pts = (chore.points + extrasPoints) * count;
     vibrate(count > 1 ? [15, 40, 15] : 15);
     if (leveledUp) playLevelUpSound(soundOn);
     else if (justUnlocked) playAchievementSound(soundOn);
@@ -194,7 +229,14 @@ export default function App() {
     setTimeout(() => setConfetti(null), (justUnlocked || leveledUp) ? 2800 : 2000);
   };
 
-  const removeEntry = (id) => save({ ...dataRef.current, log: dataRef.current.log.filter((e) => e.id !== id) });
+  const removeEntry = (id) => {
+    setRemovingIds((ids) => [...ids, id]);
+    vibrate(10);
+    setTimeout(() => {
+      save({ ...dataRef.current, log: dataRef.current.log.filter((e) => e.id !== id) });
+      setRemovingIds((ids) => ids.filter((x) => x !== id));
+    }, 280);
+  };
   const updateUser = (id, patch) => save({ ...dataRef.current, users: dataRef.current.users.map((u) => (u.id === id ? { ...u, ...patch } : u)) });
 
   const addChore = () => {
@@ -210,9 +252,59 @@ export default function App() {
   const resetHistory = () => { if (window.confirm("Azzerare tutto lo storico e i punti?")) save({ ...dataRef.current, log: [] }); };
 
   const setCoupleGoal = (target, deadline) => save({ ...dataRef.current, coupleGoal: target ? { target: Number(target), deadline, createdAt: todayStr() } : null });
-  const addCustomCategory = (name) => { if (name.trim() && !allCategories.includes(name.trim())) save({ ...dataRef.current, customCategories: [...(dataRef.current.customCategories || []), name.trim()] }); };
-  const removeCustomCategory = (name) => save({ ...dataRef.current, customCategories: (dataRef.current.customCategories || []).filter((c) => c !== name) });
+  const addCustomCategory = (name) => {
+    const n = name.trim();
+    if (!n || allCategories.includes(n)) return;
+    save({ ...dataRef.current, categories: [...(dataRef.current.categories || []), n] });
+  };
+  const renameCategory = (oldName, newName) => {
+    const n = newName.trim();
+    if (!n || n === oldName) return;
+    const cats = Array.from(new Set((dataRef.current.categories || []).map((c) => (c === oldName ? n : c))));
+    const chores = dataRef.current.chores.map((c) => (c.category === oldName ? { ...c, category: n } : c));
+    save({ ...dataRef.current, categories: cats, chores });
+  };
+  const removeCategory = (name) => {
+    const cats = (dataRef.current.categories || []).filter((c) => c !== name);
+    if (cats.length === 0) return; // deve restarne almeno una
+    const fallback = cats[0];
+    // I lavori che usavano la categoria eliminata passano alla prima rimasta
+    const chores = dataRef.current.chores.map((c) => (c.category === name ? { ...c, category: fallback } : c));
+    save({ ...dataRef.current, categories: cats, chores });
+  };
+  const choresUsingCategory = (name) => (dataRef.current?.chores || []).filter((c) => c.category === name).length;
   const togglePenalties = () => save({ ...dataRef.current, penaltiesOn: !dataRef.current.penaltiesOn });
+
+  // Ricompense
+  const addReward = (reward) => save({ ...dataRef.current, rewards: [...(dataRef.current.rewards || []), { id: uid(), claimed: false, ...reward }] });
+  const removeReward = (id) => save({ ...dataRef.current, rewards: (dataRef.current.rewards || []).filter((r) => r.id !== id) });
+  const claimReward = (id) => save({ ...dataRef.current, rewards: (dataRef.current.rewards || []).map((r) => (r.id === id ? { ...r, claimed: true, claimedAt: todayStr(), claimedBy: identity } : r)) });
+
+  // Citazioni salvate
+  const isQuoteSaved = (q) => (dataRef.current.savedQuotes || []).some((s) => s.text === q.text);
+  const toggleSaveQuote = (q) => {
+    const saved = dataRef.current.savedQuotes || [];
+    if (saved.some((s) => s.text === q.text)) save({ ...dataRef.current, savedQuotes: saved.filter((s) => s.text !== q.text) });
+    else save({ ...dataRef.current, savedQuotes: [{ ...q, savedAt: todayStr() }, ...saved] });
+  };
+
+  // Ricorrenza lavori (giorni; 0/null = nessuna)
+  const setChoreRecurrence = (id, days) => save({ ...dataRef.current, chores: dataRef.current.chores.map((c) => (c.id === id ? { ...c, recurrence: days ? { days: Number(days) } : null } : c)) });
+
+  // Giustificazione giorni serie
+  const excuseDay = (userId, date, reason, note = '') => {
+    const excused = { ...(dataRef.current.excused || {}) };
+    excused[userId] = { ...(excused[userId] || {}), [date]: { reason, note } };
+    save({ ...dataRef.current, excused });
+  };
+  const unexcuseDay = (userId, date) => {
+    const excused = { ...(dataRef.current.excused || {}) };
+    if (excused[userId]) {
+      excused[userId] = { ...excused[userId] };
+      delete excused[userId][date];
+    }
+    save({ ...dataRef.current, excused });
+  };
 
   // Vacanza: range di date in cui lo streak è "in pausa"
   const setVacation = (userId, from, to) => {
@@ -238,7 +330,7 @@ export default function App() {
   };
 
   const handleChoreClick = (chore) => {
-    setPickerCount(1); setPickerDate(todayStr()); setPickerDedicate(false);
+    setPickerCount(1); setPickerDate(todayStr()); setPickerDedicate(false); setPickerExtras([]);
     setPickerChore(chore);
   };
 
@@ -250,19 +342,42 @@ export default function App() {
     );
   }
 
-  const dailyChore = (() => {
-    if (data.chores.length === 0) return null;
-    const seed = todayStr().split('-').join('');
-    return data.chores[parseInt(seed, 10) % data.chores.length];
-  })();
+  const cardShadow = t.shadow;
 
-  const cardShadow = dark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(45,42,74,0.05)';
-
-  // Salute casa, citazione, messaggio motivazionale, allarme streak
+  // Salute casa, citazione giornaliera, messaggio motivazionale, allarme streak
   const health = houseHealth(data.log, choresById);
-  const quote = quoteOfTheWeek();
+  const hState = houseState(health.score);
+  const quote = quoteOfTheDay();
+  const quoteSaved = isQuoteSaved(quote);
   const motivation = me ? motivationalMessage(data.log, choresById, me.id, otherUser?.id, data.users) : null;
   const streakRisk = me && streaks[me.id] > 0 && !data.log.some((e) => e.userId === me.id && e.date === todayStr()) && new Date().getHours() >= 18;
+
+  // Lavori ricorrenti in scadenza o scaduti
+  const dueChores = data.chores
+    .map((c) => ({ chore: c, rec: recurringStatus(c, data.log) }))
+    .filter((x) => x.rec && (x.rec.status === 'due' || x.rec.status === 'overdue'))
+    .sort((a, b) => a.rec.daysLeft - b.rec.daysLeft);
+
+  // Contesto ricompense
+  const weeklyWinnerId = (() => {
+    if (!otherUser || !me) return null;
+    const ws = startOfWeek();
+    const wk = {};
+    data.users.forEach((u) => { wk[u.id] = 0; });
+    data.log.forEach((e) => { if (new Date(e.timestamp) >= ws) wk[e.userId] = (wk[e.userId] || 0) + pointsForEntry(e, choresById); });
+    const sorted = [...data.users].sort((a, b) => (wk[b.id] || 0) - (wk[a.id] || 0));
+    return (wk[sorted[0].id] || 0) > (wk[sorted[1]?.id] || 0) ? sorted[0].id : null;
+  })();
+  const rewardCtx = me ? {
+    myId: me.id,
+    myTotal: totals[me.id] || 0,
+    otherTotal: otherUser ? totals[otherUser.id] || 0 : 0,
+    coupleTotal: Object.values(totals).reduce((a, b) => a + b, 0),
+    weeklyWinnerId,
+    myWeekPoints: 1,
+  } : null;
+  const rewards = data.rewards || [];
+  const unclaimedAchievedRewards = rewardCtx ? rewards.filter((r) => !r.claimed && rewardAchieved(r, rewardCtx)) : [];
 
   // Progresso obiettivo di coppia
   const coupleGoalProgress = (() => {
@@ -273,12 +388,12 @@ export default function App() {
   })();
 
   return (
-    <div style={{ background: t.bg, minHeight: '100vh', fontFamily: "'Nunito', sans-serif", color: t.text, paddingBottom: 'calc(92px + env(safe-area-inset-bottom))', transition: 'background 0.4s' }}>
+    <div style={{ background: t.bg, minHeight: '100vh', fontFamily: t.font, color: t.text, paddingBottom: 'calc(92px + env(safe-area-inset-bottom))', transition: 'background 0.4s' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap');
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { margin: 0; }
-        .display { font-family: 'Fredoka', sans-serif; }
+        .display { font-family: ${t.fontDisplay}; font-weight: ${t.displayWeight}; }
         @keyframes pop { 0% { transform: scale(0.6) translateY(10px); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
         @keyframes float-up { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-140px) scale(1.5) rotate(20deg); opacity: 0; } }
         @keyframes fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -301,7 +416,10 @@ export default function App() {
         .nav-btn:active { transform: scale(0.85); }
         button { font-family: inherit; }
         ::-webkit-scrollbar { display: none; }
-        input, select { background: ${t.card}; color: ${t.text}; }
+        input, select { background: ${t.card}; color: ${t.text}; min-height: 44px; }
+        input[type="date"] { min-height: 44px; }
+        @keyframes slide-out { from { opacity: 1; transform: translateX(0); max-height: 80px; } to { opacity: 0; transform: translateX(40px); max-height: 0; margin: 0; padding-top: 0; padding-bottom: 0; } }
+        .slide-out { animation: slide-out 0.28s ease-in forwards; overflow: hidden; }
       `}</style>
 
       {error && <div style={{ background: '#FFE5E5', color: '#C0392B', fontSize: '12px', padding: '8px 16px', textAlign: 'center' }}>{error}</div>}
@@ -349,17 +467,39 @@ export default function App() {
             <div style={{ textAlign: 'center', marginBottom: '16px' }}>
               <div style={{ fontSize: '36px' }}>{pickerChore.emoji}</div>
               <div className="display" style={{ fontSize: '18px', fontWeight: 600, color: t.text }}>{pickerChore.name}</div>
-              <div style={{ fontSize: '14px', color: t.textSoft }}>+{pickerChore.points * pickerCount} punti{pickerCount > 1 ? ` (${pickerChore.points} × ${pickerCount})` : ''}</div>
+              {(() => {
+                const exPts = (pickerChore.extras || []).filter((e) => pickerExtras.includes(e.id)).reduce((s, e) => s + e.points, 0);
+                const unit = pickerChore.points + exPts;
+                return <div style={{ fontSize: '14px', color: t.textSoft }}>+{unit * pickerCount} punti{pickerCount > 1 ? ` (${unit} × ${pickerCount})` : ''}{exPts > 0 ? ` · include +${exPts} extra` : ''}</div>;
+              })()}
             </div>
 
             {/* Quantità */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', marginBottom: '6px' }}>
-              <button onClick={() => setPickerCount((c) => Math.max(1, c - 1))} style={{ width: '44px', height: '44px', borderRadius: '50%', border: `2px solid ${t.line}`, background: t.card, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Minus size={20} /></button>
+              <button onClick={() => setPickerCount((c) => Math.max(1, c - 1))} style={{ width: '52px', height: '52px', borderRadius: '50%', border: `2px solid ${t.line}`, background: t.card, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Minus size={24} /></button>
               <div className="display" style={{ fontSize: '32px', fontWeight: 800, minWidth: '50px', textAlign: 'center', color: t.text }}>{pickerCount}</div>
-              <button onClick={() => setPickerCount((c) => Math.min(20, c + 1))} style={{ width: '44px', height: '44px', borderRadius: '50%', border: `2px solid ${t.line}`, background: t.card, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={20} /></button>
+              <button onClick={() => setPickerCount((c) => Math.min(20, c + 1))} style={{ width: '52px', height: '52px', borderRadius: '50%', border: `2px solid ${t.line}`, background: t.card, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={24} /></button>
             </div>
             <div style={{ fontSize: '11px', color: t.textSoft, textAlign: 'center', marginBottom: '14px' }}>Quante volte?</div>
 
+            {/* Extra opzionali */}
+            {(pickerChore.extras || []).length > 0 && (
+              <div style={{ background: dark ? 'rgba(255,255,255,0.05)' : '#F5F0FF', borderRadius: '14px', padding: '12px', marginBottom: '12px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: t.text, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}><Plus size={15} color={t.lavender} /> Hai fatto anche...? (facoltativo)</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {(pickerChore.extras || []).map((ex) => {
+                    const on = pickerExtras.includes(ex.id);
+                    return (
+                      <button key={ex.id} onClick={() => setPickerExtras((arr) => on ? arr.filter((x) => x !== ex.id) : [...arr, ex.id])} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px', borderRadius: '12px', border: `2px solid ${on ? t.lavender : t.line}`, background: on ? (dark ? 'rgba(167,139,250,0.15)' : '#EDE7FF') : t.card, cursor: 'pointer', textAlign: 'left', minHeight: '44px' }}>
+                        <div style={{ width: '22px', height: '22px', borderRadius: '7px', border: `2px solid ${on ? t.lavender : t.line}`, background: on ? t.lavender : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{on && <Check size={14} color="#fff" />}</div>
+                        <span style={{ flex: 1, fontSize: '14px', fontWeight: 700, color: t.text }}>{ex.name}</span>
+                        <span style={{ fontSize: '14px', fontWeight: 800, color: t.lavender }}>+{ex.points}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {/* Retrodatazione */}
             <div style={{ background: dark ? 'rgba(255,255,255,0.05)' : '#FFF7ED', borderRadius: '14px', padding: '12px', marginBottom: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontSize: '13px', fontWeight: 700, color: t.text }}>
@@ -388,11 +528,11 @@ export default function App() {
             {/* Chi */}
             {me ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <button onClick={() => logChore(pickerChore, me, pickerCount, pickerDate, pickerDedicate)} style={{ background: me.color, border: 'none', borderRadius: '18px', padding: '16px', color: '#fff', fontFamily: "'Fredoka', sans-serif", fontWeight: 600, fontSize: '17px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <button onClick={() => logChore(pickerChore, me, pickerCount, pickerDate, pickerDedicate, pickerExtras)} style={{ background: me.color, border: 'none', borderRadius: '18px', padding: '16px', color: '#fff', fontFamily: "'Fredoka', sans-serif", fontWeight: 600, fontSize: '17px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '24px' }}>{me.emoji}</span> L'ho fatto io
                 </button>
                 {otherUser && (
-                  <button onClick={() => logChore(pickerChore, otherUser, pickerCount, pickerDate, false)} style={{ background: 'transparent', border: `2px solid ${otherUser.color}`, borderRadius: '18px', padding: '12px', color: otherUser.color, fontFamily: "'Fredoka', sans-serif", fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <button onClick={() => logChore(pickerChore, otherUser, pickerCount, pickerDate, false, pickerExtras)} style={{ background: 'transparent', border: `2px solid ${otherUser.color}`, borderRadius: '18px', padding: '12px', color: otherUser.color, fontFamily: "'Fredoka', sans-serif", fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '20px' }}>{otherUser.emoji}</span> L'ha fatto {otherUser.name}
                   </button>
                 )}
@@ -400,7 +540,7 @@ export default function App() {
             ) : (
               <div style={{ display: 'flex', gap: '12px' }}>
                 {data.users.map((u) => (
-                  <button key={u.id} onClick={() => logChore(pickerChore, u, pickerCount, pickerDate, false)} style={{ flex: 1, background: u.color, border: 'none', borderRadius: '18px', padding: '18px 8px', color: '#fff', fontFamily: "'Fredoka', sans-serif", fontWeight: 600, fontSize: '16px', cursor: 'pointer' }}>
+                  <button key={u.id} onClick={() => logChore(pickerChore, u, pickerCount, pickerDate, false, pickerExtras)} style={{ flex: 1, background: u.color, border: 'none', borderRadius: '18px', padding: '18px 8px', color: '#fff', fontFamily: "'Fredoka', sans-serif", fontWeight: 600, fontSize: '16px', cursor: 'pointer' }}>
                     <div style={{ fontSize: '28px', marginBottom: '4px' }}>{u.emoji}</div>{u.name}
                   </button>
                 ))}
@@ -418,9 +558,9 @@ export default function App() {
           <p style={{ margin: '2px 0 0', color: t.textSoft, fontSize: '13px' }}>{me ? `Ciao ${me.name}! ${me.emoji}` : 'Dividetevi i lavori, raccogliete punti'}</p>
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
-          <button onClick={() => setShowShare(true)} className="nav-btn" style={{ background: t.card, border: 'none', borderRadius: '12px', width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textSoft, cursor: 'pointer', boxShadow: cardShadow }}><Share2 size={18} /></button>
-          <button onClick={() => setSoundOn((s) => !s)} className="nav-btn" style={{ background: t.card, border: 'none', borderRadius: '12px', width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textSoft, cursor: 'pointer', boxShadow: cardShadow }}>{soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />}</button>
-          <button onClick={() => setDark((d) => !d)} className="nav-btn" style={{ background: t.card, border: 'none', borderRadius: '12px', width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textSoft, cursor: 'pointer', boxShadow: cardShadow }}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button>
+          <button onClick={() => setShowShare(true)} className="nav-btn" style={{ background: t.card, border: 'none', borderRadius: '12px', width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textSoft, cursor: 'pointer', boxShadow: cardShadow }}><Share2 size={18} /></button>
+          <button onClick={() => setSoundOn((s) => !s)} className="nav-btn" style={{ background: t.card, border: 'none', borderRadius: '12px', width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textSoft, cursor: 'pointer', boxShadow: cardShadow }}>{soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />}</button>
+          <button onClick={() => setDark((d) => !d)} className="nav-btn" style={{ background: t.card, border: 'none', borderRadius: '12px', width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textSoft, cursor: 'pointer', boxShadow: cardShadow }}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button>
         </div>
       </div>
 
@@ -469,7 +609,7 @@ export default function App() {
                     {onVacation ? (
                       <div style={{ fontSize: '12px', marginTop: '6px', color: t.textSoft, display: 'flex', alignItems: 'center', gap: '4px' }}><Palmtree size={14} color={t.mint} /> in pausa</div>
                     ) : streaks[u.id] > 0 && (
-                      <div style={{ fontSize: '12px', marginTop: '6px', color: t.textSoft, display: 'flex', alignItems: 'center', gap: '4px' }}><Flame size={14} color={t.coral} /> {streaks[u.id]} {streaks[u.id] === 1 ? 'giorno' : 'giorni'}</div>
+                      <button onClick={() => setTab('streak')} style={{ fontSize: '12px', marginTop: '6px', color: t.textSoft, display: 'flex', alignItems: 'center', gap: '4px', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}><Flame size={14} color={t.coral} /> {streaks[u.id]} {streaks[u.id] === 1 ? 'giorno' : 'giorni'}</button>
                     )}
                   </div>
                 );
@@ -499,39 +639,70 @@ export default function App() {
             </button>
           )}
 
-          {/* Citazione settimanale */}
-          <div className="slide-up" style={{ background: dark ? 'rgba(167,139,250,0.12)' : '#F5F0FF', borderRadius: '16px', padding: '14px 16px', marginBottom: '16px', borderLeft: `4px solid ${t.lavender}` }}>
-            <div style={{ fontSize: '14px', fontStyle: 'italic', color: t.text, lineHeight: 1.5 }}>"{quote.text}"</div>
-            <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '6px', fontWeight: 700 }}>— {quote.author}{quote.source ? `, ${quote.source}` : ''}</div>
+          {/* Casetta illustrata — salute della casa */}
+          <div className="slide-up" style={{ background: t.card, borderRadius: t.radius, padding: '18px', marginBottom: '16px', boxShadow: cardShadow, display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <HouseSvg score={health.score} t={t} size={104} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: t.textSoft, textTransform: 'uppercase', letterSpacing: '0.04em' }}>La casa è</div>
+              <div className="display" style={{ fontSize: '20px', fontWeight: 800, color: t.text, textTransform: 'capitalize' }}>{hState.label}{hState.sparkle ? ' ✨' : ''}</div>
+              <div style={{ height: '8px', background: t.line, borderRadius: '6px', overflow: 'hidden', marginTop: '10px' }}>
+                <div style={{ height: '100%', width: `${health.score}%`, background: health.color, borderRadius: '6px', transition: 'width 0.6s' }} />
+              </div>
+              <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '6px' }}>{hState.sparkle ? 'Perfetta! Continuate così 🌟' : health.score < 35 ? 'Un paio di lavori e migliora subito' : 'Si mantiene bene'}</div>
+            </div>
+          </div>
+
+          {/* Lavori in scadenza (ricorrenti) */}
+          {dueChores.length > 0 && (
+            <div className="slide-up" style={{ background: t.card, borderRadius: t.radius, padding: '14px', marginBottom: '16px', boxShadow: cardShadow, borderLeft: `4px solid ${t.sunny}` }}>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}><Bell size={16} color={t.sunny} /> Da fare presto</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {dueChores.slice(0, 4).map(({ chore, rec }) => (
+                  <div key={chore.id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ fontSize: '20px' }}>{chore.emoji}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{chore.name}</div>
+                      <div style={{ fontSize: '11px', color: rec.status === 'overdue' ? t.coral : t.textSoft, fontWeight: 700 }}>
+                        {rec.status === 'overdue' ? `In ritardo di ${Math.abs(rec.daysLeft)} ${Math.abs(rec.daysLeft) === 1 ? 'giorno' : 'giorni'}` : rec.daysLeft === 0 ? 'Da fare oggi' : 'Da fare domani'}
+                      </div>
+                    </div>
+                    <button onClick={() => handleChoreClick(chore)} className="wiggle" style={{ background: t.sunny, border: 'none', borderRadius: t.radiusSm, padding: '11px 16px', fontWeight: 700, color: '#2D2A4A', cursor: 'pointer', fontSize: '14px', minHeight: '44px' }}>Fatto</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Ricompense */}
+          {(rewards.length > 0 || unclaimedAchievedRewards.length > 0) && (
+            <button onClick={() => setShowRewards(true)} className="slide-up" style={{ width: '100%', textAlign: 'left', background: unclaimedAchievedRewards.length > 0 ? `linear-gradient(135deg, ${t.sunny}, ${t.coral})` : t.card, border: 'none', borderRadius: t.radius, padding: '14px', marginBottom: '16px', boxShadow: cardShadow, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Gift size={26} color={unclaimedAchievedRewards.length > 0 ? '#fff' : t.lavender} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '14px', fontWeight: 800, color: unclaimedAchievedRewards.length > 0 ? '#fff' : t.text }}>
+                  {unclaimedAchievedRewards.length > 0 ? `${unclaimedAchievedRewards.length} ricompensa${unclaimedAchievedRewards.length > 1 ? 'e' : ''} da riscuotere! 🎁` : 'Ricompense'}
+                </div>
+                <div style={{ fontSize: '12px', color: unclaimedAchievedRewards.length > 0 ? 'rgba(255,255,255,0.9)' : t.textSoft }}>
+                  {unclaimedAchievedRewards.length > 0 ? 'Tocca per vedere' : `${rewards.filter((r) => !r.claimed).length} attive`}
+                </div>
+              </div>
+            </button>
+          )}
+
+          {/* Citazione del giorno (salvabile) */}
+          <div className="slide-up" style={{ background: t.style === 'minimal' ? (dark ? 'rgba(167,139,250,0.1)' : '#FFFFFF') : (dark ? 'rgba(167,139,250,0.12)' : '#F5F0FF'), borderRadius: t.radius, padding: '14px 16px', marginBottom: '16px', borderLeft: `4px solid ${t.lavender}`, boxShadow: t.style === 'minimal' ? cardShadow : 'none', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '14px', fontStyle: 'italic', color: t.text, lineHeight: 1.5 }}>"{quote.text}"</div>
+              <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '6px', fontWeight: 700 }}>— {quote.author}{quote.source ? `, ${quote.source}` : ''}</div>
+            </div>
+            <button onClick={() => toggleSaveQuote(quote)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: quoteSaved ? t.coral : t.textSoft, flexShrink: 0, padding: '2px' }} title={quoteSaved ? 'Salvata' : 'Salva citazione'}>
+              <Bookmark size={20} fill={quoteSaved ? t.coral : 'none'} />
+            </button>
           </div>
 
           {/* Messaggio motivazionale */}
           {motivation && (
-            <div className="slide-up" style={{ background: t.card, borderRadius: '14px', padding: '12px 14px', marginBottom: '16px', fontSize: '13px', color: t.text, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: cardShadow }}>
+            <div className="slide-up" style={{ background: t.card, borderRadius: t.radiusSm, padding: '12px 14px', marginBottom: '16px', fontSize: '13px', color: t.text, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: cardShadow }}>
               <Sparkles size={16} color={t.sunny} /> {motivation}
-            </div>
-          )}
-
-          {/* Salute casa */}
-          <div className="slide-up" style={{ background: t.card, borderRadius: '16px', padding: '14px', marginBottom: '16px', boxShadow: cardShadow, display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ fontSize: '32px' }}>{health.emoji}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '13px', fontWeight: 800, color: t.text }}>{health.label}</div>
-              <div style={{ height: '8px', background: t.line, borderRadius: '6px', overflow: 'hidden', marginTop: '6px' }}>
-                <div style={{ height: '100%', width: `${health.score}%`, background: health.color, borderRadius: '6px', transition: 'width 0.6s' }} />
-              </div>
-            </div>
-          </div>
-
-          {/* Lavoro del giorno */}
-          {dailyChore && (
-            <div className="daily-badge quick-card" onClick={() => handleChoreClick({ ...dailyChore, points: dailyChore.points * 2 })} style={{ background: `linear-gradient(135deg, ${t.sunny}, ${t.coral})`, borderRadius: '18px', padding: '14px 16px', marginBottom: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: cardShadow }}>
-              <div style={{ fontSize: '32px' }}>{dailyChore.emoji}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '11px', fontWeight: 800, color: 'rgba(255,255,255,0.9)' }}>⭐ LAVORO DEL GIORNO · PUNTI DOPPI</div>
-                <div style={{ fontSize: '16px', fontWeight: 800, color: '#fff' }} className="display">{dailyChore.name}</div>
-                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.9)', fontWeight: 700 }}>+{dailyChore.points * 2} pt invece di {dailyChore.points}</div>
-              </div>
             </div>
           )}
 
@@ -539,7 +710,7 @@ export default function App() {
           <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Azioni rapide</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '18px' }}>
             {data.chores.slice(0, 6).map((c, i) => (
-              <button key={c.id} onClick={() => handleChoreClick(c)} className="quick-card slide-up" style={{ background: t.card, border: 'none', borderRadius: '18px', padding: '14px 10px', textAlign: 'left', boxShadow: cardShadow, cursor: 'pointer', animationDelay: `${i * 0.04}s` }}>
+              <button key={c.id} onClick={() => handleChoreClick(c)} className="quick-card slide-up" style={{ background: t.card, border: 'none', borderRadius: '18px', padding: '16px', textAlign: 'left', boxShadow: cardShadow, cursor: 'pointer', animationDelay: `${i * 0.04}s` }}>
                 <div style={{ fontSize: '24px' }}>{c.emoji}</div>
                 <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '4px', lineHeight: 1.2, color: t.text }}>{c.name}</div>
                 <div style={{ fontSize: '12px', color: '#D49A00', fontWeight: 700, marginTop: '2px' }}>+{c.points} pt</div>
@@ -573,6 +744,17 @@ export default function App() {
       {/* ===== WIDGET ===== */}
       {tab === 'widget' && <WidgetScreen data={data} choresById={choresById} totals={totals} streaks={streaks} me={me} t={t} dark={dark} health={health} />}
 
+      {/* ===== SERIE ===== */}
+      {tab === 'streak' && (
+        <StreakView
+          data={data}
+          me={me}
+          t={t}
+          onExcuse={excuseDay}
+          onUnexcuse={unexcuseDay}
+        />
+      )}
+
       {/* ===== LAVORI ===== */}
       {tab === 'chores' && (
         <div className="fade-in" style={{ padding: '0 18px' }}>
@@ -591,14 +773,59 @@ export default function App() {
               <button onClick={addChore} style={{ width: '100%', marginTop: '8px', background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Aggiungi lavoro</button>
             </div>
           )}
-          <div style={{ fontSize: '11px', color: t.textSoft, marginBottom: '10px', background: t.card, borderRadius: '12px', padding: '10px 12px' }}>💡 Cambiando i punti di un lavoro, <strong>tutto lo storico si ricalcola</strong> automaticamente.</div>
+          <div style={{ fontSize: '11px', color: t.textSoft, marginBottom: '10px', background: t.card, borderRadius: t.radiusSm, padding: '10px 12px' }}>💡 Cambiando i punti di un lavoro, <strong>tutto lo storico si ricalcola</strong> automaticamente.</div>
+
+          {/* Ricerca */}
+          <div style={{ position: 'relative', marginBottom: '10px' }}>
+            <Search size={16} color={t.textSoft} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+            <input placeholder="Cerca un lavoro..." value={choreSearch} onChange={(e) => setChoreSearch(e.target.value)} style={{ width: '100%', padding: '11px 11px 11px 38px', borderRadius: t.radiusSm, border: `1px solid ${t.line}`, fontSize: '14px', background: t.card, color: t.text }} />
+            {choreSearch && <button onClick={() => setChoreSearch('')} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><X size={16} /></button>}
+          </div>
+
+          {/* Filtri categoria */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '14px', flexWrap: 'wrap' }}>
+            {['all', ...allCategories].map((cat) => {
+              const active = choreCat === cat;
+              return <button key={cat} onClick={() => setChoreCat(cat)} style={{ padding: '7px 12px', borderRadius: t.radiusSm, border: 'none', fontWeight: 700, fontSize: '12px', cursor: 'pointer', background: active ? t.coral : t.card, color: active ? '#fff' : t.textSoft, boxShadow: active ? 'none' : cardShadow }}>{cat === 'all' ? 'Tutte' : cat}</button>;
+            })}
+          </div>
+
+          {/* Usati di recente */}
+          {(() => {
+            const recent = recentChores(data.log, choresById, 7, 5);
+            if (recent.length === 0 || choreSearch || choreCat !== 'all') return null;
+            return (
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 800, color: t.textSoft, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}><Clock size={14} /> USATI DI RECENTE</div>
+                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                  {recent.map((c) => (
+                    <button key={c.id} onClick={() => handleChoreClick(c)} className="quick-card" style={{ flexShrink: 0, background: t.card, border: 'none', borderRadius: t.radiusSm, padding: '10px 14px', boxShadow: cardShadow, cursor: 'pointer', textAlign: 'center', minWidth: '88px' }}>
+                      <div style={{ fontSize: '24px' }}>{c.emoji}</div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, marginTop: '4px', color: t.text, lineHeight: 1.1 }}>{c.name.length > 16 ? c.name.slice(0, 15) + '…' : c.name}</div>
+                      <div style={{ fontSize: '11px', color: t.coral, fontWeight: 800, marginTop: '2px' }}>+{c.points}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {data.chores.map((c) => (
-              <ChoreRow key={c.id} chore={c} editing={editingChoreId === c.id} t={t} categories={allCategories}
-                onEdit={() => setEditingChoreId(editingChoreId === c.id ? null : c.id)}
-                onSave={(patch) => { updateChore(c.id, patch); setEditingChoreId(null); }}
-                onDelete={() => removeChore(c.id)} onLog={() => handleChoreClick(c)} />
-            ))}
+            {(() => {
+              const filtered = data.chores.filter((c) => {
+                if (choreCat !== 'all' && c.category !== choreCat) return false;
+                if (choreSearch && !c.name.toLowerCase().includes(choreSearch.toLowerCase())) return false;
+                return true;
+              });
+              if (filtered.length === 0) return <div style={{ background: t.card, borderRadius: t.radius, padding: '16px', color: t.textSoft, fontSize: '14px', textAlign: 'center' }}>Nessun lavoro trovato.</div>;
+              return filtered.map((c) => (
+                <ChoreRow key={c.id} chore={c} editing={editingChoreId === c.id} t={t} categories={allCategories} log={data.log}
+                  onEdit={() => setEditingChoreId(editingChoreId === c.id ? null : c.id)}
+                  onSave={(patch) => { updateChore(c.id, patch); setEditingChoreId(null); }}
+                  onDelete={() => removeChore(c.id)} onLog={() => handleChoreClick(c)}
+                  onRecurrence={(days) => setChoreRecurrence(c.id, days)} />
+              ));
+            })()}
           </div>
         </div>
       )}
@@ -632,20 +859,37 @@ export default function App() {
                 if (historySearch && !info.name.toLowerCase().includes(historySearch.toLowerCase())) return false;
                 return true;
               });
-              if (filtered.length === 0) return <div style={{ background: t.card, borderRadius: '16px', padding: '16px', color: t.textSoft, fontSize: '14px', textAlign: 'center' }}>Nessuna attività trovata.</div>;
-              return filtered.map((e, i) => {
-                const u = data.users.find((x) => x.id === e.userId);
-                const info = choreNameForEntry(e, choresById);
-                const dedUser = e.dedicatedTo ? data.users.find((x) => x.id === e.dedicatedTo) : null;
+              if (filtered.length === 0) return <div style={{ background: t.card, borderRadius: t.radius, padding: '16px', color: t.textSoft, fontSize: '14px', textAlign: 'center' }}>Nessuna attività trovata.</div>;
+              const groups = groupByDay(filtered);
+              let idx = 0;
+              return groups.map((g) => {
+                const dayPts = g.entries.reduce((s, e) => s + pointsForEntry(e, choresById), 0);
                 return (
-                  <div key={e.id} className="slide-up" style={{ background: t.card, borderRadius: '16px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: cardShadow, animationDelay: `${Math.min(i, 10) * 0.02}s` }}>
-                    <div style={{ fontSize: '22px' }}>{info.emoji}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{info.name} {dedUser && <Heart size={11} color={t.coral} fill={t.coral} style={{ display: 'inline', verticalAlign: 'middle' }} />}</div>
-                      <div style={{ fontSize: '12px', color: t.textSoft }}>{u?.emoji} {u?.name} · {formatDate(e.timestamp)} alle {formatTime(e.timestamp)}{dedUser ? ` · ❤️ ${dedUser.name}` : ''}</div>
+                  <div key={g.date}>
+                    {/* Intestazione giorno */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '14px 4px 8px', position: 'sticky', top: 0 }}>
+                      <div className="display" style={{ fontSize: '14px', fontWeight: 800, color: t.text, textTransform: 'capitalize' }}>{g.label}</div>
+                      <div style={{ fontSize: '12px', fontWeight: 800, color: t.coral, background: t.style === 'minimal' ? 'transparent' : (dark ? 'rgba(255,107,107,0.12)' : '#FFF0EE'), padding: '3px 10px', borderRadius: '10px' }}>{g.entries.length} {g.entries.length === 1 ? 'lavoro' : 'lavori'} · {dayPts} pt</div>
                     </div>
-                    <div style={{ fontWeight: 800, color: u?.color }} className="display">+{pointsForEntry(e, choresById)}</div>
-                    <button onClick={() => removeEntry(e.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><Trash2 size={16} /></button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {g.entries.map((e) => {
+                        const u = data.users.find((x) => x.id === e.userId);
+                        const info = choreNameForEntry(e, choresById);
+                        const dedUser = e.dedicatedTo ? data.users.find((x) => x.id === e.dedicatedTo) : null;
+                        idx++;
+                        return (
+                          <div key={e.id} className={removingIds.includes(e.id) ? 'slide-out' : 'slide-up'} style={{ background: t.card, borderRadius: t.radiusSm, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: cardShadow, animationDelay: removingIds.includes(e.id) ? '0s' : `${Math.min(idx, 10) * 0.02}s` }}>
+                            <div style={{ fontSize: '22px' }}>{info.emoji}</div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{info.name} {dedUser && <Heart size={11} color={t.coral} fill={t.coral} style={{ display: 'inline', verticalAlign: 'middle' }} />}</div>
+                              <div style={{ fontSize: '12px', color: t.textSoft }}>{u?.emoji} {u?.name} · {formatTime(e.timestamp)}{dedUser ? ` · ❤️ ${dedUser.name}` : ''}</div>
+                            </div>
+                            <div style={{ fontWeight: 800, color: u?.color }} className="display">+{pointsForEntry(e, choresById)}</div>
+                            <button onClick={() => removeEntry(e.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><Trash2 size={16} /></button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               });
@@ -662,27 +906,41 @@ export default function App() {
         <SettingsView
           data={data} me={me} identity={identity} setIdentity={setIdentity} updateUser={updateUser}
           soundOn={soundOn} setSoundOn={setSoundOn} dark={dark} setDark={setDark} seasonal={seasonal} setSeasonal={setSeasonal}
+          style={style} setStyle={setStyle}
           exportCSV={exportCSV} resetHistory={resetHistory} t={t} cardShadow={cardShadow} season={season}
-          allCategories={allCategories} addCustomCategory={addCustomCategory} removeCustomCategory={removeCustomCategory}
+          allCategories={allCategories} addCustomCategory={addCustomCategory} renameCategory={renameCategory} removeCategory={removeCategory} choresUsingCategory={choresUsingCategory}
           penaltiesOn={data.penaltiesOn} togglePenalties={togglePenalties} vacations={data.vacations} setVacation={setVacation}
+          onOpenRewards={() => setShowRewards(true)} onOpenSavedQuotes={() => setShowSavedQuotes(true)}
+          savedCount={(data.savedQuotes || []).length}
         />
       )}
 
       {/* Goal edit modal */}
       {showGoalEdit && <GoalEditModal current={data.coupleGoal} onSave={(target, deadline) => { setCoupleGoal(target, deadline); setShowGoalEdit(false); }} onClose={() => setShowGoalEdit(false)} t={t} />}
 
+      {/* Rewards modal */}
+      {showRewards && rewardCtx && (
+        <RewardsModal rewards={rewards} ctx={rewardCtx} users={data.users} identity={identity} t={t}
+          onAdd={addReward} onRemove={removeReward} onClaim={claimReward} onClose={() => setShowRewards(false)} />
+      )}
+
+      {/* Saved quotes modal */}
+      {showSavedQuotes && (
+        <SavedQuotesModal saved={data.savedQuotes || []} t={t} onRemove={(q) => toggleSaveQuote(q)} onClose={() => setShowSavedQuotes(false)} />
+      )}
+
       {/* Bottom nav */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: t.card, boxShadow: dark ? '0 -4px 16px rgba(0,0,0,0.4)' : '0 -4px 16px rgba(45,42,74,0.08)', display: 'flex', justifyContent: 'space-around', padding: '10px 2px calc(14px + env(safe-area-inset-bottom))', borderRadius: '20px 20px 0 0' }}>
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: t.navBg, backdropFilter: t.blur, WebkitBackdropFilter: t.blur, boxShadow: dark ? '0 -4px 16px rgba(0,0,0,0.4)' : '0 -4px 16px rgba(45,42,74,0.08)', borderTop: t.style === 'minimal' ? `0.5px solid ${t.line}` : 'none', display: 'flex', justifyContent: 'space-around', padding: '10px 2px calc(14px + env(safe-area-inset-bottom))', borderRadius: t.style === 'minimal' ? '0' : '20px 20px 0 0' }}>
         {[
           { id: 'home', icon: Home, label: 'Home' },
           { id: 'chores', icon: ListChecks, label: 'Lavori' },
           { id: 'history', icon: History, label: 'Storico' },
+          { id: 'streak', icon: Flame, label: 'Serie' },
           { id: 'stats', icon: BarChart3, label: 'Stats' },
-          { id: 'widget', icon: LayoutGrid, label: 'Widget' },
           { id: 'settings', icon: Settings, label: 'Opzioni' },
         ].map((it) => {
           const Icon = it.icon; const active = tab === it.id;
-          return <button key={it.id} onClick={() => setTab(it.id)} className="nav-btn" style={{ background: 'transparent', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', color: active ? t.coral : t.textSoft, cursor: 'pointer', fontSize: '9px', fontWeight: 700, flex: 1 }}><Icon size={19} />{it.label}</button>;
+          return <button key={it.id} onClick={() => setTab(it.id)} className="nav-btn" style={{ background: 'transparent', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', color: active ? t.coral : t.textSoft, cursor: 'pointer', fontSize: '11px', fontWeight: 700, flex: 1, minHeight: '50px', padding: '4px 0' }}><Icon size={23} />{it.label}</button>;
         })}
       </div>
     </div>
@@ -693,7 +951,7 @@ export default function App() {
 // COMPONENTI AUSILIARI
 // ============================================================
 
-function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, removeCustomCategory, penaltiesOn, togglePenalties, vacations, setVacation }) {
+function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, style, setStyle, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, renameCategory, removeCategory, choresUsingCategory, penaltiesOn, togglePenalties, vacations, setVacation, onOpenRewards, onOpenSavedQuotes, savedCount }) {
   const [newCat, setNewCat] = useState('');
   const customCats = data.customCategories || [];
 
@@ -738,38 +996,81 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
         ))}
       </div>
 
-      {/* Categorie personalizzate */}
-      <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Categorie personalizzate</div>
-      <div style={{ background: t.card, borderRadius: '18px', padding: '14px', boxShadow: cardShadow, marginBottom: '20px' }}>
-        <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '10px' }}>Le 5 categorie base non si possono eliminare. Aggiungi le tue (es. Garage, Giardino).</div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
-          {customCats.map((c) => (
-            <div key={c} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: t.lavender, color: '#fff', borderRadius: '10px', padding: '6px 10px', fontSize: '12px', fontWeight: 700 }}>
-              {c} <button onClick={() => removeCustomCategory(c)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>
-            </div>
-          ))}
-          {customCats.length === 0 && <span style={{ fontSize: '12px', color: t.textSoft }}>Nessuna categoria personalizzata</span>}
+      {/* Categorie */}
+      <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Categorie</div>
+      <div style={{ background: t.card, borderRadius: t.radius, padding: '14px', boxShadow: cardShadow, marginBottom: '20px' }}>
+        <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '12px' }}>Personalizza tutte le categorie. Rinominandone una, i lavori collegati si aggiornano da soli. Eliminandone una, i suoi lavori passano alla prima categoria.</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+          {allCategories.map((c) => {
+            const used = choresUsingCategory(c);
+            return (
+              <div key={c} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  defaultValue={c}
+                  onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== c) renameCategory(c, v); else e.target.value = c; }}
+                  style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px', fontWeight: 700, background: t.card, color: t.text }}
+                />
+                <span style={{ fontSize: '11px', color: t.textSoft, minWidth: '52px', textAlign: 'right' }}>{used} {used === 1 ? 'lavoro' : 'lavori'}</span>
+                <button
+                  onClick={() => {
+                    if (allCategories.length <= 1) return;
+                    if (used > 0) { if (!window.confirm(`"${c}" è usata da ${used} lavori. Eliminandola, passeranno a "${allCategories.find((x) => x !== c)}". Procedere?`)) return; }
+                    removeCategory(c);
+                  }}
+                  disabled={allCategories.length <= 1}
+                  style={{ background: 'transparent', border: 'none', color: allCategories.length <= 1 ? t.line : t.textSoft, cursor: allCategories.length <= 1 ? 'default' : 'pointer', display: 'flex', padding: '8px' }}
+                ><Trash2 size={16} /></button>
+              </div>
+            );
+          })}
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <input value={newCat} onChange={(e) => setNewCat(e.target.value)} placeholder="Nuova categoria" style={{ flex: 1, padding: '8px 10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '13px' }} />
-          <button onClick={() => { addCustomCategory(newCat); setNewCat(''); }} style={{ background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '8px 14px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>Aggiungi</button>
+          <input value={newCat} onChange={(e) => setNewCat(e.target.value)} placeholder="Nuova categoria (es. Garage)" style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '13px' }} />
+          <button onClick={() => { addCustomCategory(newCat); setNewCat(''); }} style={{ background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '8px 16px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>Aggiungi</button>
         </div>
       </div>
 
+      {/* Stile grafico */}
+      <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Stile grafico</div>
+      <div style={{ background: t.card, borderRadius: t.radius, padding: '14px', boxShadow: cardShadow, marginBottom: '20px' }}>
+        <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '10px' }}>Scegli l'aspetto dell'app. Puoi tornare indietro quando vuoi con un tocco.</div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button onClick={() => setStyle('pop')} style={{ flex: 1, padding: '14px', borderRadius: t.radiusSm, border: `2px solid ${style === 'pop' ? t.coral : t.line}`, background: style === 'pop' ? (dark ? 'rgba(255,107,107,0.12)' : '#FFF0EE') : 'transparent', cursor: 'pointer', textAlign: 'center' }}>
+            <div style={{ fontSize: '24px' }}>🎨</div>
+            <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, marginTop: '4px' }}>Colorato</div>
+            <div style={{ fontSize: '10px', color: t.textSoft }}>Vivace e giocoso {style === 'pop' ? '✓' : ''}</div>
+          </button>
+          <button onClick={() => setStyle('minimal')} style={{ flex: 1, padding: '14px', borderRadius: t.radiusSm, border: `2px solid ${style === 'minimal' ? t.coral : t.line}`, background: style === 'minimal' ? (dark ? 'rgba(255,107,107,0.12)' : '#FFF0EE') : 'transparent', cursor: 'pointer', textAlign: 'center' }}>
+            <div style={{ fontSize: '24px' }}>🍏</div>
+            <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, marginTop: '4px' }}>Minimal</div>
+            <div style={{ fontSize: '10px', color: t.textSoft }}>Pulito, stile Apple {style === 'minimal' ? '✓' : ''}</div>
+          </button>
+        </div>
+      </div>
+
+      {/* Ricompense & Citazioni */}
+      <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Extra</div>
+      <button onClick={onOpenRewards} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '10px', boxShadow: cardShadow }}>
+        <Gift size={18} color={t.lavender} /> Gestisci ricompense <span style={{ marginLeft: 'auto', color: t.textSoft, fontSize: '12px' }}>{(data.rewards || []).length}</span>
+      </button>
+      <button onClick={onOpenSavedQuotes} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '20px', boxShadow: cardShadow }}>
+        <Bookmark size={18} color={t.coral} /> Citazioni salvate <span style={{ marginLeft: 'auto', color: t.textSoft, fontSize: '12px' }}>{savedCount}</span>
+      </button>
+
       {/* Preferenze */}
       <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Preferenze</div>
-      <div style={{ background: t.card, borderRadius: '18px', padding: '4px 14px', boxShadow: cardShadow, marginBottom: '20px' }}>
+      <div style={{ background: t.card, borderRadius: t.radius, padding: '4px 14px', boxShadow: cardShadow, marginBottom: '20px' }}>
         <ToggleRow label="🔊 Suoni" value={soundOn} onChange={() => setSoundOn((s) => !s)} t={t} />
         <ToggleRow label="🌙 Tema scuro" value={!!dark} onChange={() => setDark((d) => !d)} t={t} />
         <ToggleRow label={`${season.emoji} Tema stagionale (${season.name})`} value={seasonal} onChange={() => setSeasonal((s) => !s)} t={t} />
         <ToggleRow label="⚠️ Penalità per lavori dimenticati" value={penaltiesOn} onChange={togglePenalties} t={t} last />
       </div>
-      {penaltiesOn && <div style={{ fontSize: '11px', color: t.textSoft, marginBottom: '20px', background: t.card, borderRadius: '12px', padding: '10px 12px' }}>Con le penalità attive, dimenticare a lungo i lavori chiave abbassa la "salute della casa" più velocemente.</div>}
+      {penaltiesOn && <div style={{ fontSize: '11px', color: t.textSoft, marginBottom: '20px', background: t.card, borderRadius: t.radiusSm, padding: '10px 12px' }}>Con le penalità attive, dimenticare a lungo i lavori chiave abbassa la "salute della casa" più velocemente.</div>}
 
       {/* Dati */}
       <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Dati</div>
-      <button onClick={exportCSV} style={{ width: '100%', background: t.card, border: `1px solid ${t.line}`, color: t.text, borderRadius: '14px', padding: '12px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', marginBottom: '10px' }}><Download size={16} /> Esporta storico (CSV)</button>
-      <button onClick={resetHistory} style={{ width: '100%', background: t.card, border: `1px solid ${t.line}`, color: '#C0392B', borderRadius: '14px', padding: '12px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', marginBottom: '24px' }}><RotateCcw size={16} /> Azzera storico e punti</button>
+      <button onClick={exportCSV} style={{ width: '100%', background: t.card, border: `1px solid ${t.line}`, color: t.text, borderRadius: t.radiusSm, padding: '12px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', marginBottom: '10px' }}><Download size={16} /> Esporta storico (CSV)</button>
+      <button onClick={resetHistory} style={{ width: '100%', background: t.card, border: `1px solid ${t.line}`, color: '#C0392B', borderRadius: t.radiusSm, padding: '12px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', marginBottom: '24px' }}><RotateCcw size={16} /> Azzera storico e punti</button>
     </div>
   );
 }
@@ -816,35 +1117,208 @@ function EmojiPicker({ options, value, onChange, t }) {
   );
 }
 
-function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, t, categories }) {
+function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, t, categories, log, onRecurrence }) {
   const [draft, setDraft] = useState(chore);
   useEffect(() => { setDraft(chore); }, [chore, editing]);
+  const rec = log ? recurringStatus(chore, log) : null;
   if (editing) {
+    const recDays = draft.recurrence?.days || 0;
     return (
-      <div className="pop-card" style={{ background: t.card, borderRadius: '16px', padding: '14px', boxShadow: '0 6px 16px rgba(45,42,74,0.1)' }}>
+      <div className="pop-card" style={{ background: t.card, borderRadius: t.radiusSm, padding: '14px', boxShadow: '0 6px 16px rgba(45,42,74,0.1)' }}>
         <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, marginBottom: '8px', fontSize: '14px', fontFamily: 'inherit', fontWeight: 700 }} />
         <EmojiPicker options={CHORE_EMOJIS} value={draft.emoji} onChange={(em) => setDraft({ ...draft, emoji: em })} t={t} />
         <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
           <input type="number" value={draft.points} onChange={(e) => setDraft({ ...draft, points: Number(e.target.value) || 0 })} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px' }} />
           <select value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px' }}>{(categories || CATEGORIES).map((c) => <option key={c}>{c}</option>)}</select>
         </div>
-        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+        {/* Ricorrenza */}
+        <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '12px', color: t.textSoft, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}><Repeat size={14} /> Ricorrenza:</span>
+          {[[0, 'No'], [1, 'Ogni giorno'], [3, 'Ogni 3 gg'], [7, 'Ogni settimana'], [14, 'Ogni 2 sett.'], [30, 'Ogni mese']].map(([d, label]) => (
+            <button key={d} onClick={() => setDraft({ ...draft, recurrence: d ? { days: d } : null })} style={{ padding: '6px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 700, background: recDays === d ? t.lavender : t.line, color: recDays === d ? '#fff' : t.textSoft }}>{label}</button>
+          ))}
+        </div>
+
+        {/* Extra opzionali (sotto-voci con punti facoltativi) */}
+        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${t.line}` }}>
+          <div style={{ fontSize: '12px', color: t.textSoft, fontWeight: 700, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><Plus size={14} color={t.lavender} /> Extra opzionali (punti in più facoltativi)</div>
+          {(draft.extras || []).map((ex, i) => (
+            <div key={ex.id} style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px' }}>
+              <input value={ex.name} placeholder="Es. Pulizia filtri" onChange={(e) => {
+                const extras = [...draft.extras]; extras[i] = { ...ex, name: e.target.value }; setDraft({ ...draft, extras });
+              }} style={{ flex: 1, padding: '9px', borderRadius: '9px', border: `1px solid ${t.line}`, fontSize: '13px' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <span style={{ fontSize: '13px', color: t.textSoft, fontWeight: 700 }}>+</span>
+                <input type="number" value={ex.points} onChange={(e) => {
+                  const extras = [...draft.extras]; extras[i] = { ...ex, points: Number(e.target.value) || 0 }; setDraft({ ...draft, extras });
+                }} style={{ width: '56px', padding: '9px', borderRadius: '9px', border: `1px solid ${t.line}`, fontSize: '13px', textAlign: 'center' }} />
+              </div>
+              <button onClick={() => setDraft({ ...draft, extras: draft.extras.filter((x) => x.id !== ex.id) })} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', display: 'flex', padding: '6px' }}><X size={16} /></button>
+            </div>
+          ))}
+          <button onClick={() => setDraft({ ...draft, extras: [...(draft.extras || []), { id: 'ex-' + uid(), name: '', points: 2 }] })} style={{ background: 'transparent', border: `1.5px dashed ${t.line}`, color: t.textSoft, borderRadius: '9px', padding: '8px 12px', fontWeight: 700, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}><Plus size={14} /> Aggiungi extra</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
           <button onClick={onDelete} style={{ background: '#FFE5E5', border: 'none', color: '#C0392B', borderRadius: '10px', padding: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700, fontSize: '13px' }}><Trash2 size={15} /> Elimina</button>
-          <button onClick={() => onSave(draft)} style={{ flex: 1, background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Salva</button>
+          <button onClick={() => onSave({ ...draft, extras: (draft.extras || []).filter((e) => e.name.trim()) })} style={{ flex: 1, background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Salva</button>
           <button onClick={onEdit} style={{ background: t.line, border: 'none', color: t.textSoft, borderRadius: '10px', padding: '10px', cursor: 'pointer' }}><X size={16} /></button>
         </div>
       </div>
     );
   }
   return (
-    <div style={{ background: t.card, borderRadius: '16px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 12px rgba(45,42,74,0.04)' }}>
+    <div style={{ background: t.card, borderRadius: t.radiusSm, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: t.shadow }}>
       <div style={{ fontSize: '24px' }}>{chore.emoji}</div>
       <div style={{ flex: 1 }} onClick={onLog} role="button">
-        <div style={{ fontSize: '14px', fontWeight: 700, color: t.text }}>{chore.name}</div>
-        <div style={{ fontSize: '12px', color: t.textSoft }}>{chore.category} · {chore.points} punti</div>
+        <div style={{ fontSize: '14px', fontWeight: 700, color: t.text, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {chore.name}
+          {rec && <Repeat size={12} color={t.textSoft} />}
+        </div>
+        <div style={{ fontSize: '12px', color: t.textSoft }}>
+          {chore.category} · {chore.points} punti
+          {(chore.extras || []).length > 0 && <span style={{ color: t.lavender, fontWeight: 700 }}> · {chore.extras.length} extra</span>}
+          {rec && rec.status === 'overdue' && <span style={{ color: t.coral, fontWeight: 700 }}> · in ritardo</span>}
+          {rec && rec.status === 'due' && <span style={{ color: t.sunny, fontWeight: 700 }}> · da fare</span>}
+        </div>
       </div>
-      <button onClick={onEdit} style={{ background: t.line, border: 'none', borderRadius: '10px', padding: '8px', color: t.textSoft, cursor: 'pointer', display: 'flex' }}><Pencil size={15} /></button>
-      <button onClick={onLog} className="wiggle" style={{ background: t.sunny, border: 'none', borderRadius: '12px', padding: '8px 12px', fontWeight: 700, color: '#2D2A4A', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}><Check size={15} /> Fatto</button>
+      <button onClick={onEdit} style={{ background: t.line, border: 'none', borderRadius: '12px', padding: '11px', color: t.textSoft, cursor: 'pointer', display: 'flex', minHeight: '44px', alignItems: 'center' }}><Pencil size={17} /></button>
+      <button onClick={onLog} className="wiggle" style={{ background: t.sunny, border: 'none', borderRadius: t.radiusSm, padding: '11px 16px', fontWeight: 700, color: '#2D2A4A', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '14px', minHeight: '44px' }}><Check size={17} /> Fatto</button>
+    </div>
+  );
+}
+
+// ============================================================
+// MODALE RICOMPENSE
+// ============================================================
+function RewardsModal({ rewards, ctx, users, identity, t, onAdd, onRemove, onClaim, onClose }) {
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ title: '', emoji: '🎁', type: 'points', target: 100 });
+
+  const submit = () => {
+    if (!form.title.trim()) return;
+    onAdd({ title: form.title.trim(), emoji: form.emoji, type: form.type, target: Number(form.target) || 0 });
+    setForm({ title: '', emoji: '🎁', type: 'points', target: 100 });
+    setAdding(false);
+  };
+
+  const typeLabel = (r) => {
+    if (r.type === 'points') return `Quando raggiungi ${r.target} punti`;
+    if (r.type === 'couple') return `Quando insieme raggiungete ${r.target} punti`;
+    if (r.type === 'weekly_win') return `Quando vinci la settimana`;
+    return '';
+  };
+  const progress = (r) => {
+    if (r.type === 'points') return Math.min(100, Math.round(((ctx.myTotal || 0) / r.target) * 100));
+    if (r.type === 'couple') return Math.min(100, Math.round(((ctx.coupleTotal || 0) / r.target) * 100));
+    if (r.type === 'weekly_win') return ctx.weeklyWinnerId === ctx.myId ? 100 : 0;
+    return 0;
+  };
+
+  const REWARD_EMOJIS = ['🎁', '🍕', '🎬', '☕', '🍫', '🛋️', '💆', '🍷', '🏆', '❤️', '🎮', '🧖', '🍦', '🛍️'];
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,74,0.5)', zIndex: 60, display: 'flex', alignItems: 'flex-end' }} onClick={onClose}>
+      <div className="pop-card" style={{ background: t.card, width: '100%', borderRadius: '28px 28px 0 0', padding: '24px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))', maxHeight: '88vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+          <div className="display" style={{ fontSize: '20px', fontWeight: 800, color: t.text, display: 'flex', alignItems: 'center', gap: '8px' }}><Gift size={22} color={t.lavender} /> Ricompense</div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><X size={22} /></button>
+        </div>
+        <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '16px' }}>Premi veri concordati tra voi. Quando raggiungi l'obiettivo, riscuoti! 🎉</div>
+
+        {rewards.length === 0 && !adding && (
+          <div style={{ textAlign: 'center', padding: '20px', color: t.textSoft, fontSize: '14px' }}>Nessuna ricompensa ancora. Aggiungine una!</div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+          {rewards.map((r) => {
+            const achieved = rewardAchieved(r, ctx);
+            const pct = progress(r);
+            return (
+              <div key={r.id} style={{ background: achieved && !r.claimed ? `linear-gradient(135deg, ${t.sunny}22, ${t.coral}22)` : (t.style === 'minimal' ? 'transparent' : (t.card)), border: `1.5px solid ${achieved && !r.claimed ? t.coral : t.line}`, borderRadius: t.radiusSm, padding: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ fontSize: '28px', opacity: r.claimed ? 0.4 : 1 }}>{r.emoji}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 800, color: t.text, textDecoration: r.claimed ? 'line-through' : 'none' }}>{r.title}</div>
+                    <div style={{ fontSize: '11px', color: t.textSoft }}>{typeLabel(r)}</div>
+                  </div>
+                  <button onClick={() => onRemove(r.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><Trash2 size={15} /></button>
+                </div>
+                {!r.claimed && (
+                  <>
+                    <div style={{ height: '6px', background: t.line, borderRadius: '4px', overflow: 'hidden', marginTop: '10px' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: achieved ? t.mint : t.lavender, borderRadius: '4px', transition: 'width 0.5s' }} />
+                    </div>
+                    {achieved ? (
+                      <button onClick={() => onClaim(r.id)} style={{ width: '100%', marginTop: '10px', background: t.coral, border: 'none', color: '#fff', borderRadius: '10px', padding: '10px', fontWeight: 800, cursor: 'pointer', fontSize: '13px' }}>🎉 Riscuoti ricompensa!</button>
+                    ) : (
+                      <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '6px', textAlign: 'right' }}>{pct}%</div>
+                    )}
+                  </>
+                )}
+                {r.claimed && <div style={{ fontSize: '11px', color: t.mint, fontWeight: 700, marginTop: '6px' }}>✓ Riscossa{r.claimedBy ? ` da ${users.find((u) => u.id === r.claimedBy)?.name || ''}` : ''}</div>}
+              </div>
+            );
+          })}
+        </div>
+
+        {adding ? (
+          <div style={{ background: t.style === 'minimal' ? 'transparent' : (t.card), border: `1px solid ${t.line}`, borderRadius: t.radiusSm, padding: '14px' }}>
+            <input placeholder="Es. Cena fuori a scelta" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '10px' }} />
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+              {REWARD_EMOJIS.map((em) => (
+                <button key={em} onClick={() => setForm({ ...form, emoji: em })} style={{ width: '36px', height: '36px', fontSize: '18px', borderRadius: '10px', border: form.emoji === em ? `2px solid ${t.coral}` : `1px solid ${t.line}`, background: 'transparent', cursor: 'pointer' }}>{em}</button>
+              ))}
+            </div>
+            <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>Condizione</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+              {[['points', 'Raggiungo un totale di punti'], ['couple', 'Raggiungiamo insieme dei punti'], ['weekly_win', 'Vinco la settimana']].map(([val, label]) => (
+                <button key={val} onClick={() => setForm({ ...form, type: val })} style={{ textAlign: 'left', padding: '10px', borderRadius: '10px', border: `1.5px solid ${form.type === val ? t.lavender : t.line}`, background: form.type === val ? (t.style === 'minimal' ? 'transparent' : `${t.lavender}11`) : 'transparent', color: t.text, fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>{label}</button>
+              ))}
+            </div>
+            {(form.type === 'points' || form.type === 'couple') && (
+              <input type="number" placeholder="Punti" value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '10px' }} />
+            )}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => setAdding(false)} style={{ background: t.line, border: 'none', color: t.textSoft, borderRadius: '10px', padding: '10px 14px', fontWeight: 700, cursor: 'pointer' }}>Annulla</button>
+              <button onClick={submit} style={{ flex: 1, background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Aggiungi ricompensa</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setAdding(true)} style={{ width: '100%', background: 'transparent', border: `2px dashed ${t.line}`, color: t.textSoft, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><Plus size={16} /> Nuova ricompensa</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MODALE CITAZIONI SALVATE
+// ============================================================
+function SavedQuotesModal({ saved, t, onRemove, onClose }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,74,0.5)', zIndex: 60, display: 'flex', alignItems: 'flex-end' }} onClick={onClose}>
+      <div className="pop-card" style={{ background: t.card, width: '100%', borderRadius: '28px 28px 0 0', padding: '24px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))', maxHeight: '85vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+          <div className="display" style={{ fontSize: '20px', fontWeight: 800, color: t.text, display: 'flex', alignItems: 'center', gap: '8px' }}><Bookmark size={20} color={t.coral} /> Citazioni salvate</div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><X size={22} /></button>
+        </div>
+        {saved.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px', color: t.textSoft, fontSize: '14px' }}>Nessuna citazione salvata.<br />Tocca il segnalibro sulla citazione del giorno per salvarla.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {saved.map((q, i) => (
+              <div key={i} style={{ background: t.style === 'minimal' ? 'transparent' : `${t.lavender}11`, border: `1px solid ${t.line}`, borderRadius: t.radiusSm, padding: '14px', borderLeft: `4px solid ${t.lavender}`, display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '14px', fontStyle: 'italic', color: t.text, lineHeight: 1.5 }}>"{q.text}"</div>
+                  <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '6px', fontWeight: 700 }}>— {q.author}{q.source ? `, ${q.source}` : ''}</div>
+                </div>
+                <button onClick={() => onRemove(q)} style={{ background: 'transparent', border: 'none', color: t.coral, cursor: 'pointer', flexShrink: 0 }}><Trash2 size={16} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

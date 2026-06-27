@@ -195,7 +195,7 @@ export default function StatsView({ data, choresById, t, dark }) {
   const trends = useMemo(() => users.map((u) => ({ user: u, ...computeTrend(data.log, choresById, u.id, 7) })), [data, choresById, users]);
 
   // ---- Radar ----
-  const radarData = useMemo(() => categoryRadar(data.log, choresById, users), [data, choresById, users]);
+  const radarData = useMemo(() => categoryRadar(data.log, choresById, users, data.categories || CATEGORIES), [data, choresById, users]);
   const hasRadarData = radarData.some((r) => users.some((u) => r[u.name] > 0));
 
   // ---- Fasce orarie ----
@@ -255,7 +255,7 @@ export default function StatsView({ data, choresById, t, dark }) {
             return (
               <button key={m.id} onClick={() => setAchievementInfo({ ...m, unlocked, how: m.desc })} style={{ textAlign: 'center', opacity: unlocked ? 1 : 0.4, background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
                 <div style={{ fontSize: '22px' }}>{unlocked ? m.emoji : <Lock size={16} color={t.textSoft} />}</div>
-                <div style={{ fontSize: '8px', color: t.textSoft, marginTop: '2px', lineHeight: 1.1 }}>{m.title}</div>
+                <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '4px', lineHeight: 1.15 }}>{m.title}</div>
               </button>
             );
           })}
@@ -414,7 +414,7 @@ export default function StatsView({ data, choresById, t, dark }) {
             </div>
             {(() => {
               const diff = Math.abs((fairness[0]?.pct || 0) - (fairness[1]?.pct || 0));
-              let msg = diff <= 10 ? 'Perfettamente equilibrato! 🎯' : diff <= 30 ? 'Quasi in pari 👍' : 'Squilibrio evidente 😅';
+              let msg = diff <= 10 ? 'Siete forti tutti e due 🥹' : diff <= 30 ? 'Quasi in pari 👍' : 'Squilibrio evidente 😅';
               return <div style={{ fontSize: '12px', color: t.textSoft, textAlign: 'center', marginTop: '8px' }}>{msg}</div>;
             })()}
           </div>
@@ -496,7 +496,7 @@ export default function StatsView({ data, choresById, t, dark }) {
                 return (
                   <button key={a.id} onClick={() => setAchievementInfo({ ...a, unlocked })} style={{ textAlign: 'center', opacity: unlocked ? 1 : 0.4, background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
                     <div style={{ fontSize: '26px' }}>{unlocked ? a.emoji : <Lock size={18} color={t.textSoft} />}</div>
-                    <div style={{ fontSize: '9px', color: t.textSoft, marginTop: '2px', lineHeight: 1.1 }}>{a.title}</div>
+                    <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '4px', lineHeight: 1.15 }}>{a.title}</div>
                   </button>
                 );
               })}

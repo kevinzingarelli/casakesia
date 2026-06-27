@@ -82,3 +82,17 @@ export function quoteOfTheWeek() {
   const idx = (wk + year) % QUOTES.length;
   return QUOTES[idx];
 }
+
+// Giorno dell'anno (1-366), per ruotare la citazione ogni giorno
+function dayOfYear(d = new Date()) {
+  const start = new Date(d.getFullYear(), 0, 0);
+  const diff = d - start;
+  return Math.floor(diff / 86400000);
+}
+
+export function quoteOfTheDay() {
+  const doy = dayOfYear();
+  const year = new Date().getFullYear();
+  const idx = (doy + year) % QUOTES.length;
+  return QUOTES[idx];
+}

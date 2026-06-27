@@ -17,19 +17,117 @@ export const PALETTE = {
   lineDark: '#3A3550',
 };
 
-// Tema chiaro/scuro
-export function theme(dark) {
+// Palette Minimal (stile iOS/Apple)
+export const PALETTE_MIN = {
+  bg: '#F2F2F7', bgDark: '#000000',
+  card: '#FFFFFF', cardDark: '#1C1C1E',
+  text: '#1C1C1E', textDark: '#FFFFFF',
+  textSoft: '#8E8E93', textSoftDark: '#98989F',
+  line: '#E5E5EA', lineDark: '#38383A',
+};
+
+// Tema: dark (true/false) + style ('pop' | 'minimal')
+export function theme(dark, style = 'pop') {
+  const minimal = style === 'minimal';
+  if (minimal) {
+    return {
+      style: 'minimal',
+      bg: dark ? PALETTE_MIN.bgDark : PALETTE_MIN.bg,
+      card: dark ? PALETTE_MIN.cardDark : PALETTE_MIN.card,
+      text: dark ? PALETTE_MIN.textDark : PALETTE_MIN.text,
+      textSoft: dark ? PALETTE_MIN.textSoftDark : PALETTE_MIN.textSoft,
+      line: dark ? PALETTE_MIN.lineDark : PALETTE_MIN.line,
+      coral: PALETTE.coral, mint: PALETTE.mint, lavender: PALETTE.lavender, sunny: PALETTE.sunny,
+      font: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif",
+      fontDisplay: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif",
+      displayWeight: 600,
+      radius: '18px', radiusSm: '12px', radiusLg: '22px',
+      shadow: dark ? '0 1px 3px rgba(0,0,0,0.6)' : '0 1px 2px rgba(0,0,0,0.04), 0 6px 20px rgba(0,0,0,0.05)',
+      blur: 'saturate(180%) blur(20px)',
+      navBg: dark ? 'rgba(28,28,30,0.78)' : 'rgba(255,255,255,0.78)',
+    };
+  }
   return {
+    style: 'pop',
     bg: dark ? PALETTE.bgDark : PALETTE.bg,
     card: dark ? PALETTE.cardDark : PALETTE.card,
     text: dark ? '#F0EEF7' : PALETTE.plum,
     textSoft: dark ? '#A8A3C0' : PALETTE.plumSoft,
     line: dark ? PALETTE.lineDark : PALETTE.line,
-    coral: PALETTE.coral,
-    mint: PALETTE.mint,
-    lavender: PALETTE.lavender,
-    sunny: PALETTE.sunny,
+    coral: PALETTE.coral, mint: PALETTE.mint, lavender: PALETTE.lavender, sunny: PALETTE.sunny,
+    font: "'Nunito', sans-serif",
+    fontDisplay: "'Fredoka', sans-serif",
+    displayWeight: 700,
+    radius: '24px', radiusSm: '16px', radiusLg: '28px',
+    shadow: dark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(45,42,74,0.05)',
+    blur: 'none',
+    navBg: dark ? PALETTE.cardDark : PALETTE.card,
   };
+}
+
+// Stato della casetta illustrata in base alla salute (0-100)
+export function houseState(score) {
+  if (score >= 85) return { level: 4, label: 'splendente', sparkle: true };
+  if (score >= 60) return { level: 3, label: 'pulita', sparkle: false };
+  if (score >= 35) return { level: 2, label: 'normale', sparkle: false };
+  if (score >= 15) return { level: 1, label: 'da sistemare', sparkle: false };
+  return { level: 0, label: 'trasandata', sparkle: false };
+}
+
+// Stato di un lavoro ricorrente: quando è stato fatto l'ultima volta e se è in scadenza
+export function recurringStatus(chore, log) {
+  if (!chore.recurrence || !chore.recurrence.days) return null;
+  const days = chore.recurrence.days;
+  const entries = log.filter((e) => e.choreId === chore.id).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  if (entries.length === 0) return { status: 'due', daysLeft: 0, lastDone: null, every: days };
+  const last = new Date(entries[0].timestamp);
+  const next = new Date(last); next.setDate(next.getDate() + days);
+  const now = new Date();
+  const daysLeft = Math.ceil((next - now) / 86400000);
+  let status = 'ok';
+  if (daysLeft <= 0) status = 'overdue';
+  else if (daysLeft <= 1) status = 'due';
+  return { status, daysLeft, lastDone: entries[0].date, every: days };
+}
+
+// Verifica se una ricompensa è stata raggiunta
+export function rewardAchieved(reward, ctx) {
+  // ctx: { myTotal, otherTotal, coupleTotal, weeklyWinnerId, myId }
+  if (reward.type === 'points') return (ctx.myTotal || 0) >= reward.target;
+  if (reward.type === 'couple') return (ctx.coupleTotal || 0) >= reward.target;
+  if (reward.type === 'weekly_win') return ctx.weeklyWinnerId === ctx.myId && (ctx.myWeekPoints || 0) > 0;
+  return false;
+}
+
+// Lavori usati più di recente/frequente nell'ultima finestra di giorni
+export function recentChores(log, choresById, days = 7, limit = 5) {
+  const since = new Date(); since.setDate(since.getDate() - days);
+  const freq = {};
+  log.forEach((e) => {
+    if (new Date(e.timestamp) >= since && choresById[e.choreId]) {
+      freq[e.choreId] = (freq[e.choreId] || 0) + 1;
+    }
+  });
+  return Object.entries(freq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id]) => choresById[id])
+    .filter(Boolean);
+}
+
+// Raggruppa le voci di log per giorno con etichette Oggi/Ieri/data
+export function groupByDay(entries) {
+  const groups = {};
+  entries.forEach((e) => { (groups[e.date] = groups[e.date] || []).push(e); });
+  const today = todayStr();
+  const yest = todayStr(new Date(Date.now() - 86400000));
+  return Object.keys(groups).sort((a, b) => b.localeCompare(a)).map((date) => {
+    let label;
+    if (date === today) label = 'Oggi';
+    else if (date === yest) label = 'Ieri';
+    else label = new Date(date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+    return { date, label, entries: groups[date] };
+  });
 }
 
 export const USER_EMOJIS = ['🦊', '🐧', '🐶', '🐱', '🐻', '🦁', '🐼', '🦄', '🐰', '🦉', '🐯', '🐨', '🐸', '🐵', '🐷', '🐔'];
@@ -160,8 +258,19 @@ export const PERIOD_LABELS = {
 // Per i lavori eliminati usiamo lo snapshot salvato nel log (fallback).
 export function pointsForEntry(entry, choresById) {
   const chore = choresById[entry.choreId];
-  if (chore) return chore.points;
-  return entry.snapshotPoints || 0; // lavoro eliminato: usa il valore storico
+  let base = chore ? chore.points : (entry.snapshotPoints || 0);
+  // Extra opzionali selezionati al momento della registrazione
+  if (entry.selectedExtras && entry.selectedExtras.length) {
+    entry.selectedExtras.forEach((exId) => {
+      const ex = chore?.extras?.find((e) => e.id === exId);
+      if (ex) base += ex.points;
+      else {
+        const snap = entry.extrasSnapshot?.find((e) => e.id === exId);
+        if (snap) base += snap.points;
+      }
+    });
+  }
+  return base;
 }
 
 export function choreNameForEntry(entry, choresById) {
@@ -178,24 +287,63 @@ export function getLevel(points) {
 }
 
 // Calcola lo streak (giorni consecutivi con almeno un lavoro) per un utente
-export function computeStreak(log, userId) {
+// excused: { [userId]: { [dateStr]: { reason: string } } }
+export function computeStreak(log, userId, excused = {}) {
+  const userExcused = excused[userId] || {};
   const days = new Set(log.filter((e) => e.userId === userId).map((e) => e.date));
   let streak = 0;
   let cursor = new Date();
-  while (true) {
+  // Se oggi non ha ancora fatto nulla e non e' giustificato, partiamo da ieri
+  if (!days.has(todayStr()) && !userExcused[todayStr()]) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  while (streak < 3650) {
     const key = todayStr(cursor);
-    if (days.has(key)) {
+    if (days.has(key) || userExcused[key]) {
       streak += 1;
       cursor.setDate(cursor.getDate() - 1);
     } else {
-      if (key === todayStr() && streak === 0) {
-        cursor.setDate(cursor.getDate() - 1);
-        if (days.has(todayStr(cursor))) continue;
-      }
       break;
     }
   }
   return streak;
+}
+
+// Storia giornaliera degli ultimi N giorni per un utente
+// status: done | excused | missed | open (oggi senza lavori ma ancora in gioco)
+export function computeStreakHistory(log, userId, excused = {}, numDays = 90) {
+  const userExcused = excused[userId] || {};
+  const countByDay = {};
+  log.filter((e) => e.userId === userId).forEach((e) => {
+    countByDay[e.date] = (countByDay[e.date] || 0) + 1;
+  });
+  const today = todayStr();
+  const result = [];
+  for (let i = numDays - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const date = todayStr(d);
+    let status;
+    if (date > today) status = 'future';
+    else if (countByDay[date]) status = 'done';
+    else if (userExcused[date]) status = 'excused';
+    else if (date === today) status = 'open';
+    else status = 'missed';
+    result.push({ date, status, reason: userExcused[date]?.reason || null, count: countByDay[date] || 0 });
+  }
+  return result;
+}
+
+// Serie piu' lunga mai fatta (inclusi giorni giustificati)
+export function computeBestStreak(log, userId, excused = {}) {
+  const history = computeStreakHistory(log, userId, excused, 3650);
+  let best = 0, cur = 0;
+  history.forEach((d) => {
+    if (d.status === 'done' || d.status === 'excused' || d.status === 'open') {
+      cur++; if (cur > best) best = cur;
+    } else { cur = 0; }
+  });
+  return best;
 }
 
 // Calcola quante settimane passate l'utente ha vinto (per il traguardo)
@@ -346,8 +494,8 @@ export function hourDistribution(log, userId) {
 }
 
 // Radar per categoria (conteggio per categoria, per utente)
-export function categoryRadar(log, choresById, users) {
-  return CATEGORIES.map((cat) => {
+export function categoryRadar(log, choresById, users, categories = CATEGORIES) {
+  return categories.map((cat) => {
     const row = { category: cat };
     users.forEach((u) => {
       row[u.name] = log.filter((e) => e.userId === u.id && choreNameForEntry(e, choresById).category === cat).length;
