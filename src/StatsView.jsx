@@ -3,7 +3,8 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, BarChart, Bar,
 } from 'recharts';
-import { Crown, Trophy, Sparkles, TrendingUp, TrendingDown, Award, Lock, X, Heart, Home as HomeIcon, Clock } from 'lucide-react';
+import { Crown, Trophy, Sparkles, TrendingUp, TrendingDown, Award, Lock, X, Heart, Home as HomeIcon, Clock, Gift, HeartHandshake, PieChart as PieIcon, Target, Scale, Flame, Medal, Star } from 'lucide-react';
+import { Avatar, SectionTitle, BadgeIcon } from './icons';
 import {
   ACHIEVEMENTS, CATEGORIES, PERIOD_LABELS, COUPLE_MILESTONES,
   todayStr, periodStart, getLevel, pointsForEntry, choreNameForEntry,
@@ -221,7 +222,7 @@ export default function StatsView({ data, choresById, t, dark }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,74,0.45)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }} onClick={() => setAchievementInfo(null)}>
           <div className="pop-card" style={{ background: t.card, borderRadius: '24px', padding: '24px', maxWidth: '320px', textAlign: 'center', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setAchievementInfo(null)} style={{ position: 'absolute', top: '12px', right: '12px', background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><X size={20} /></button>
-            <div style={{ fontSize: '52px', marginBottom: '8px' }}>{achievementInfo.unlocked ? achievementInfo.emoji : '🔒'}</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}><BadgeIcon id={achievementInfo.id} kind={String(achievementInfo.id).startsWith('cm_') ? 'milestone' : 'achievement'} unlocked={achievementInfo.unlocked} size={64} fallbackEmoji={achievementInfo.emoji} /></div>
             <div className="display" style={{ fontSize: '20px', fontWeight: 700, color: t.text }}>{achievementInfo.title}</div>
             <div style={{ fontSize: '13px', color: achievementInfo.unlocked ? t.mint : t.textSoft, marginTop: '4px', fontWeight: 700 }}>{achievementInfo.unlocked ? 'SBLOCCATO ✓' : 'DA SBLOCCARE'}</div>
             <div style={{ fontSize: '14px', color: t.text, marginTop: '14px', lineHeight: 1.5, background: dark ? 'rgba(255,255,255,0.05)' : '#FFF7ED', borderRadius: '14px', padding: '12px' }}>
@@ -232,7 +233,7 @@ export default function StatsView({ data, choresById, t, dark }) {
       )}
 
       {/* INSIEME — riepilogo di coppia in cima */}
-      <div className="display" style={titleStyle}>💞 Insieme avete raggiunto</div>
+      <SectionTitle icon={HeartHandshake} gradient="pink" t={t} style={titleStyle}>Insieme avete raggiunto</SectionTitle>
       <div style={{ ...cardStyle, background: `linear-gradient(135deg, ${t.lavender}22, ${t.mint}22)` }}>
         <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', marginBottom: '12px' }}>
           <div>
@@ -254,7 +255,7 @@ export default function StatsView({ data, choresById, t, dark }) {
             const unlocked = m.check(couple);
             return (
               <button key={m.id} onClick={() => setAchievementInfo({ ...m, unlocked, how: m.desc })} style={{ textAlign: 'center', opacity: unlocked ? 1 : 0.4, background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                <div style={{ fontSize: '22px' }}>{unlocked ? m.emoji : <Lock size={16} color={t.textSoft} />}</div>
+                <BadgeIcon id={m.id} kind="milestone" unlocked={unlocked} size={36} fallbackEmoji={m.emoji} />
                 <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '4px', lineHeight: 1.15 }}>{m.title}</div>
               </button>
             );
@@ -263,7 +264,7 @@ export default function StatsView({ data, choresById, t, dark }) {
       </div>
 
       {/* CLASSIFICA */}
-      <div className="display" style={titleStyle}>🏆 Classifica</div>
+      <SectionTitle icon={Trophy} gradient="yellow" t={t} style={titleStyle}>Classifica</SectionTitle>
       <div style={cardStyle}>
         <PeriodSelector period={rankPeriod} setPeriod={setRankPeriod} customDays={rankCustom} setCustomDays={setRankCustom} t={t} />
         {[...users].sort((a, b) => (rankTotals[b.id]?.points || 0) - (rankTotals[a.id]?.points || 0)).map((u, i) => (
@@ -271,7 +272,7 @@ export default function StatsView({ data, choresById, t, dark }) {
             <div style={{ fontSize: '20px', width: '28px', textAlign: 'center' }}>
               {i === 0 && rankWinner !== 'tie' && (rankTotals[u.id]?.points || 0) > 0 ? <Crown size={22} color={t.sunny} fill={t.sunny} /> : (i + 1)}
             </div>
-            <div style={{ fontSize: '26px' }}>{u.emoji}</div>
+            <Avatar user={u} size={34} />
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: '15px', color: t.text }}>{u.name}</div>
               <div style={{ fontSize: '12px', color: t.textSoft }}>{rankTotals[u.id]?.count || 0} lavori</div>
@@ -279,7 +280,7 @@ export default function StatsView({ data, choresById, t, dark }) {
             <div className="display" style={{ fontWeight: 800, fontSize: '22px', color: u.color }}>{rankTotals[u.id]?.points || 0}</div>
           </div>
         ))}
-        {rankWinner === 'tie' && <div style={{ fontSize: '12px', color: t.textSoft, textAlign: 'center', marginTop: '6px' }}>Siete in pareggio! 🤝</div>}
+        {rankWinner === 'tie' && <div style={{ fontSize: '12px', color: t.textSoft, textAlign: 'center', marginTop: '6px' }}>Siete in pareggio!</div>}
       </div>
 
       {/* PREVISIONE */}
@@ -289,18 +290,18 @@ export default function StatsView({ data, choresById, t, dark }) {
           <div style={{ fontSize: '13px', color: t.text, lineHeight: 1.5 }}>
             <strong>Proiezione fine settimana</strong> ({prediction.daysLeft} {prediction.daysLeft === 1 ? 'giorno' : 'giorni'} rimasti):<br />
             {users.map((u, i) => (
-              <span key={u.id} style={{ color: u.color, fontWeight: 700 }}>{u.emoji} {u.name}: {prediction.proj[u.id].projected}pt{i === 0 ? ' · ' : ''}</span>
+              <span key={u.id} style={{ color: u.color, fontWeight: 700 }}>{u.name}: {prediction.proj[u.id].projected}pt{i === 0 ? ' · ' : ''}</span>
             ))}
           </div>
         </div>
       )}
 
       {/* TREND */}
-      <div className="display" style={titleStyle}>📊 Andamento vs settimana scorsa</div>
+      <SectionTitle icon={TrendingUp} gradient="green" t={t} style={titleStyle}>Andamento vs settimana scorsa</SectionTitle>
       <div style={{ display: 'flex', gap: '10px', marginBottom: '18px' }}>
         {trends.map((tr) => (
           <div key={tr.user.id} style={{ flex: 1, background: t.card, borderRadius: '18px', padding: '14px', boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(45,42,74,0.05)' }}>
-            <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, display: 'flex', alignItems: 'center', gap: '4px' }} className="display">{tr.user.emoji} {tr.user.name}</div>
+            <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, display: 'flex', alignItems: 'center', gap: '4px' }} className="display"><Avatar user={tr.user} size={20} /> {tr.user.name}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
               {tr.pct >= 0 ? <TrendingUp size={18} color={t.mint} /> : <TrendingDown size={18} color={t.coral} />}
               <span className="display" style={{ fontSize: '22px', fontWeight: 800, color: tr.pct >= 0 ? t.mint : t.coral }}>{tr.pct >= 0 ? '+' : ''}{tr.pct}%</span>
@@ -311,7 +312,7 @@ export default function StatsView({ data, choresById, t, dark }) {
       </div>
 
       {/* ANDAMENTO PUNTI */}
-      <div className="display" style={titleStyle}>📈 Andamento punti</div>
+      <SectionTitle icon={TrendingUp} gradient="blue" t={t} style={titleStyle}>Andamento punti</SectionTitle>
       <div style={cardStyle}>
         <PeriodSelector period={chartPeriod} setPeriod={setChartPeriod} customDays={chartCustom} setCustomDays={setChartCustom} t={t} />
         <ResponsiveContainer width="100%" height={180}>
@@ -326,7 +327,7 @@ export default function StatsView({ data, choresById, t, dark }) {
       </div>
 
       {/* TORTA CON PERCENTUALI */}
-      <div className="display" style={titleStyle}>🥧 Chi ha fatto di più</div>
+      <SectionTitle icon={PieIcon} gradient="purple" t={t} style={titleStyle}>Chi ha fatto di più</SectionTitle>
       <div style={cardStyle}>
         {choresPerUser.length === 0 ? (
           <div style={{ color: t.textSoft, fontSize: '13px', textAlign: 'center', padding: '20px' }}>Nessun dato ancora.</div>
@@ -356,7 +357,7 @@ export default function StatsView({ data, choresById, t, dark }) {
       {/* RADAR CATEGORIE */}
       {hasRadarData && (
         <>
-          <div className="display" style={titleStyle}>🎯 Forze per categoria</div>
+          <SectionTitle icon={Target} gradient="red" t={t} style={titleStyle}>Forze per categoria</SectionTitle>
           <div style={cardStyle}>
             <ResponsiveContainer width="100%" height={250}>
               <RadarChart data={radarData}>
@@ -371,7 +372,7 @@ export default function StatsView({ data, choresById, t, dark }) {
               {users.map((u) => (
                 <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
                   <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: u.color }} />
-                  <span style={{ color: t.text, fontWeight: 700 }}>{u.emoji} {u.name}</span>
+                  <span style={{ color: t.text, fontWeight: 700 }}>{u.name}</span>
                 </div>
               ))}
             </div>
@@ -382,7 +383,7 @@ export default function StatsView({ data, choresById, t, dark }) {
       {/* FASCE ORARIE */}
       {hasHourData && (
         <>
-          <div className="display" style={titleStyle}>🕐 Quando siete più attivi</div>
+          <SectionTitle icon={Clock} gradient="indigo" t={t} style={titleStyle}>Quando siete più attivi</SectionTitle>
           <div style={cardStyle}>
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={hourData}>
@@ -400,7 +401,7 @@ export default function StatsView({ data, choresById, t, dark }) {
       {/* EQUITÀ */}
       {fairness && (
         <>
-          <div className="display" style={titleStyle}>⚖️ Equilibrio dei lavori</div>
+          <SectionTitle icon={Scale} gradient="teal" t={t} style={titleStyle}>Equilibrio dei lavori</SectionTitle>
           <div style={cardStyle}>
             <div style={{ display: 'flex', height: '28px', borderRadius: '10px', overflow: 'hidden', marginBottom: '10px' }}>
               {fairness.map((f) => (
@@ -410,11 +411,11 @@ export default function StatsView({ data, choresById, t, dark }) {
               ))}
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-              {fairness.map((f) => <span key={f.user.id} style={{ color: f.user.color, fontWeight: 700 }}>{f.user.emoji} {f.user.name}: {f.count}</span>)}
+              {fairness.map((f) => <span key={f.user.id} style={{ color: f.user.color, fontWeight: 700 }}>{f.user.name}: {f.count}</span>)}
             </div>
             {(() => {
               const diff = Math.abs((fairness[0]?.pct || 0) - (fairness[1]?.pct || 0));
-              let msg = diff <= 10 ? 'Siete forti tutti e due 🥹' : diff <= 30 ? 'Quasi in pari 👍' : 'Squilibrio evidente 😅';
+              let msg = diff <= 10 ? 'Siete forti tutti e due' : diff <= 30 ? 'Quasi in pari' : 'Squilibrio evidente';
               return <div style={{ fontSize: '12px', color: t.textSoft, textAlign: 'center', marginTop: '8px' }}>{msg}</div>;
             })()}
           </div>
@@ -422,7 +423,7 @@ export default function StatsView({ data, choresById, t, dark }) {
       )}
 
       {/* HEATMAP con periodo */}
-      <div className="display" style={titleStyle}>🔥 Costanza</div>
+      <SectionTitle icon={Flame} gradient="orange" t={t} style={titleStyle}>Costanza</SectionTitle>
       <div style={cardStyle}>
         <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
           {[['3m', '3 mesi'], ['4m', '4 mesi'], ['6m', '6 mesi'], ['12m', '1 anno']].map(([k, label]) => (
@@ -441,12 +442,12 @@ export default function StatsView({ data, choresById, t, dark }) {
       </div>
 
       {/* RECORD */}
-      <div className="display" style={titleStyle}>🏅 Record personali</div>
+      <SectionTitle icon={Medal} gradient="yellow" t={t} style={titleStyle}>Record personali</SectionTitle>
       <div style={{ display: 'flex', gap: '10px', marginBottom: '18px' }}>
         {records.map((r) => (
           <div key={r.user.id} style={{ flex: 1, background: t.card, borderRadius: '18px', padding: '14px', boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(45,42,74,0.05)' }}>
-            <div style={{ fontSize: '22px' }}>{r.user.emoji}</div>
-            <div style={{ fontWeight: 800, fontSize: '13px', color: t.text }} className="display">{r.user.name}</div>
+            <Avatar user={r.user} size={28} />
+            <div style={{ fontWeight: 800, fontSize: '13px', color: t.text, marginTop: '6px' }} className="display">{r.user.name}</div>
             <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '4px' }}>Giorno migliore</div>
             <div style={{ fontSize: '20px', fontWeight: 800, color: r.user.color }} className="display">{r.bestPts} pt</div>
             {r.bestDay && <div style={{ fontSize: '11px', color: t.textSoft }}>{parseLocalDate(r.bestDay).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</div>}
@@ -455,7 +456,7 @@ export default function StatsView({ data, choresById, t, dark }) {
       </div>
 
       {/* LIVELLI + TITOLI */}
-      <div className="display" style={titleStyle}>⭐ Livelli e titoli</div>
+      <SectionTitle icon={Star} gradient="purple" t={t} style={titleStyle}>Livelli e titoli</SectionTitle>
       <div style={{ display: 'flex', gap: '10px', marginBottom: '18px' }}>
         {users.map((u) => {
           const lvl = getLevel(totalPoints[u.id] || 0);
@@ -465,22 +466,22 @@ export default function StatsView({ data, choresById, t, dark }) {
           const title = userTitle(data.log, choresById, u.id);
           return (
             <div key={u.id} style={{ flex: 1, background: t.card, borderRadius: '18px', padding: '14px', boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(45,42,74,0.05)' }}>
-              <div style={{ fontSize: '24px' }}>{lvl.emoji}</div>
-              <div style={{ fontWeight: 800, fontSize: '14px', color: t.text }} className="display">{u.name}</div>
+              <Avatar user={u} size={30} />
+              <div style={{ fontWeight: 800, fontSize: '14px', color: t.text, marginTop: '6px' }} className="display">{u.name}</div>
               <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>{lvl.title}</div>
-              {title && <div style={{ fontSize: '11px', fontWeight: 700, color: u.color, marginBottom: '6px' }}>{title.emoji} {title.title}</div>}
+              {title && <div style={{ fontSize: '11px', fontWeight: 700, color: u.color, marginBottom: '6px' }}>{title.title}</div>}
               <div style={{ height: '8px', background: t.line, borderRadius: '6px', overflow: 'hidden', marginBottom: '6px' }}>
                 <div style={{ height: '100%', width: `${progress}%`, background: u.color, transition: 'width 0.5s' }} />
               </div>
               <div style={{ fontSize: '20px', fontWeight: 800, color: u.color }} className="display">{totalPoints[u.id] || 0} pt</div>
-              {lvl.next && <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '4px' }}>{toNext} pt → {lvl.next.emoji}</div>}
+              {lvl.next && <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '4px' }}>{toNext} pt a "{lvl.next.title}"</div>}
             </div>
           );
         })}
       </div>
 
       {/* TRAGUARDI individuali */}
-      <div className="display" style={titleStyle}>🎖️ Traguardi (tocca per i dettagli)</div>
+      <SectionTitle icon={Award} gradient="blue" t={t} style={titleStyle}>Traguardi (tocca per i dettagli)</SectionTitle>
       {users.map((u) => {
         const otherId = users.find((x) => x.id !== u.id)?.id;
         const ctx = achievementContext(data.log, choresById, u.id, otherId, data.excused || {});
@@ -488,14 +489,14 @@ export default function StatsView({ data, choresById, t, dark }) {
         return (
           <div key={u.id} style={{ ...cardStyle, marginBottom: '12px' }}>
             <div style={{ fontWeight: 800, fontSize: '13px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: t.text }} className="display">
-              {u.emoji} {u.name}<span style={{ marginLeft: 'auto', fontSize: '12px', color: t.textSoft }}>{unlockedCount}/{ACHIEVEMENTS.length}</span>
+              <Avatar user={u} size={22} /> {u.name}<span style={{ marginLeft: 'auto', fontSize: '12px', color: t.textSoft }}>{unlockedCount}/{ACHIEVEMENTS.length}</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
               {ACHIEVEMENTS.map((a) => {
                 const unlocked = a.check(ctx);
                 return (
                   <button key={a.id} onClick={() => setAchievementInfo({ ...a, unlocked })} style={{ textAlign: 'center', opacity: unlocked ? 1 : 0.4, background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                    <div style={{ fontSize: '26px' }}>{unlocked ? a.emoji : <Lock size={18} color={t.textSoft} />}</div>
+                    <BadgeIcon id={a.id} unlocked={unlocked} size={40} fallbackEmoji={a.emoji} />
                     <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '4px', lineHeight: 1.15 }}>{a.title}</div>
                   </button>
                 );
@@ -505,9 +506,88 @@ export default function StatsView({ data, choresById, t, dark }) {
         );
       })}
 
+      {/* REGALI */}
+      <GiftStats data={data} users={users} t={t} dark={dark} cardStyle={cardStyle} titleStyle={titleStyle} />
+
       {/* WALL OF FAME + MEMORIA DI COPPIA */}
       <WallOfFame data={data} choresById={choresById} users={users} t={t} cardStyle={cardStyle} titleStyle={titleStyle} />
     </div>
+  );
+}
+
+function GiftStats({ data, users, t, dark, cardStyle, titleStyle }) {
+  const requests = data.giftRequests || [];
+  const stats = useMemo(() => {
+    if (requests.length === 0) return null;
+    const concluded = requests.filter((r) => r.status === 'accepted' || r.status === 'declined' || r.status === 'done');
+    const answered = concluded.length;
+    const accepted = concluded.filter((r) => r.status !== 'declined').length;
+    const acceptRate = answered > 0 ? Math.round((accepted / answered) * 100) : null;
+    const done = requests.filter((r) => r.status === 'done').length;
+
+    const byUser = users.map((u) => ({
+      user: u,
+      asked: requests.filter((r) => r.fromUserId === u.id).length,
+      given: requests.filter((r) => r.toUserId === u.id && r.status === 'done').length,
+    }));
+    const totalAsked = byUser.reduce((s, x) => s + x.asked, 0) || 1;
+
+    const byGift = {};
+    requests.forEach((r) => { byGift[r.snapshotName] = (byGift[r.snapshotName] || { name: r.snapshotName, emoji: r.snapshotEmoji, count: 0 }); byGift[r.snapshotName].count += 1; });
+    const topGift = Object.values(byGift).sort((a, b) => b.count - a.count)[0] || null;
+
+    return { total: requests.length, done, acceptRate, byUser, totalAsked, topGift };
+  }, [requests, users]);
+
+  if (!stats) return null;
+
+  return (
+    <>
+      <SectionTitle icon={Gift} gradient="red" t={t} style={titleStyle}>Regali</SectionTitle>
+      <div style={cardStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', marginBottom: '14px' }}>
+          <div>
+            <div className="display" style={{ fontSize: '24px', fontWeight: 800, color: t.text }}>{stats.total}</div>
+            <div style={{ fontSize: '11px', color: t.textSoft }}>richiesti</div>
+          </div>
+          <div>
+            <div className="display" style={{ fontSize: '24px', fontWeight: 800, color: t.text }}>{stats.done}</div>
+            <div style={{ fontSize: '11px', color: t.textSoft }}>consegnati</div>
+          </div>
+          <div>
+            <div className="display" style={{ fontSize: '24px', fontWeight: 800, color: t.text }}>{stats.acceptRate != null ? `${stats.acceptRate}%` : '—'}</div>
+            <div style={{ fontSize: '11px', color: t.textSoft }}>accettati</div>
+          </div>
+        </div>
+
+        {/* Chi chiede di più */}
+        <div style={{ fontSize: '11px', color: t.textSoft, fontWeight: 700, marginBottom: '6px' }}>Chi chiede di più</div>
+        <div style={{ display: 'flex', height: '24px', borderRadius: '9px', overflow: 'hidden', marginBottom: '10px' }}>
+          {stats.byUser.map((x) => {
+            const pct = Math.round((x.asked / stats.totalAsked) * 100);
+            return pct > 0 ? (
+              <div key={x.user.id} style={{ width: `${pct}%`, background: x.user.color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '11px', fontWeight: 800, transition: 'width 0.5s' }}>
+                {pct > 14 ? `${pct}%` : ''}
+              </div>
+            ) : null;
+          })}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '12px' }}>
+          {stats.byUser.map((x) => (
+            <span key={x.user.id} style={{ color: x.user.color, fontWeight: 700 }}>{x.user.name}: {x.asked} chiesti · {x.given} consegnati</span>
+          ))}
+        </div>
+
+        {stats.topGift && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '10px', borderTop: `1px solid ${t.line}` }}>
+            <Gift size={20} color={t.coral} />
+            <div style={{ fontSize: '13px', color: t.text }}>
+              Il più richiesto: <strong>{stats.topGift.name}</strong> ({stats.topGift.count}×)
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -538,13 +618,13 @@ function WallOfFame({ data, choresById, users, t, cardStyle, titleStyle }) {
 
   return (
     <>
-      <div className="display" style={titleStyle}>👑 Wall of Fame</div>
+      <SectionTitle icon={Crown} gradient="yellow" t={t} style={titleStyle}>Wall of Fame</SectionTitle>
       <div style={cardStyle}>
         <Row icon={<Trophy size={22} color={t.sunny} />} t={t}>
           <strong>{stats.totalAll}</strong> lavori completati in totale dalla coppia
         </Row>
         {stats.topChore && (
-          <Row emoji={stats.topChore.emoji} t={t} border>
+          <Row icon={<Star size={22} color={t.coral} />} t={t} border>
             Lavoro più svolto: <strong>{stats.topChore.name}</strong> ({stats.topChoreN}×)
           </Row>
         )}

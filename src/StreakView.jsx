@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { Flame, Shield, X, Check, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { Flame, Shield, X, Check, ChevronLeft, ChevronRight, Info, Clock3 } from 'lucide-react';
 import { computeStreakHistory, computeStreak, computeBestStreak, todayStr, parseLocalDate } from './helpers';
 
 const REASONS = [
-  { id: 'vacation', label: '🏖️ Vacanza', short: 'Vacanza' },
-  { id: 'sick', label: '🤒 Malattia', short: 'Malattia' },
-  { id: 'busy', label: '💼 Impegni', short: 'Impegni' },
-  { id: 'away', label: '🚗 Fuori casa', short: 'Fuori casa' },
-  { id: 'other', label: '📝 Altro', short: 'Altro' },
+  { id: 'vacation', label: 'Vacanza', short: 'Vacanza' },
+  { id: 'sick', label: 'Malattia', short: 'Malattia' },
+  { id: 'busy', label: 'Impegni', short: 'Impegni' },
+  { id: 'away', label: 'Fuori casa', short: 'Fuori casa' },
+  { id: 'other', label: 'Altro', short: 'Altro' },
 ];
 
 export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
@@ -44,14 +44,6 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
     if (status === 'open') return t.sunny;
     if (status === 'missed') return t.coral;
     return t.line;
-  };
-
-  const statusEmoji = (status) => {
-    if (status === 'done') return '✅';
-    if (status === 'excused') return '🛡️';
-    if (status === 'open') return '⏳';
-    if (status === 'missed') return '❌';
-    return '·';
   };
 
   const isMyDay = (userId) => me && me.id === userId;
@@ -105,7 +97,7 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
           <div className="pop-card" style={{ background: t.card, width: '100%', borderRadius: '28px 28px 0 0', padding: '24px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
               <div className="display" style={{ fontSize: '18px', fontWeight: 800, color: t.text }}>
-                {selectedDay.status === 'missed' ? '❌ Giorno saltato' : selectedDay.status === 'excused' ? '🛡️ Giorno giustificato' : `${statusEmoji(selectedDay.status)} Giorno`}
+                {selectedDay.status === 'missed' ? 'Giorno saltato' : selectedDay.status === 'excused' ? 'Giorno giustificato' : 'Giorno'}
               </div>
               <button onClick={() => setSelectedDay(null)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><X size={22} /></button>
             </div>
@@ -146,14 +138,14 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
 
             {selectedDay.status === 'done' && (
               <div style={{ textAlign: 'center', padding: '16px 0', fontSize: '14px', color: t.textSoft }}>
-                <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}><Check size={30} color={t.mint} strokeWidth={3} /></div>
                 Hai fatto {selectedDay.count} {selectedDay.count === 1 ? 'lavoro' : 'lavori'} questo giorno. La serie è intatta!
               </div>
             )}
 
             {selectedDay.status === 'open' && (
               <div style={{ textAlign: 'center', padding: '16px 0', fontSize: '14px', color: t.textSoft }}>
-                <div style={{ fontSize: '32px', marginBottom: '8px' }}>⏳</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}><Clock3 size={30} color={t.sunny} /></div>
                 La giornata è ancora aperta. Hai tempo fino a mezzanotte!
               </div>
             )}
@@ -166,7 +158,7 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
         <Flame size={20} color={t.coral} /> Storia delle serie
       </div>
       <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '16px' }}>
-        Tocca un ❌ nei tuoi giorni per giustificarlo e recuperare la serie.
+        Tocca un giorno saltato (in rosso) per giustificarlo e recuperare la serie.
       </div>
 
       {/* Selettore periodo */}
@@ -180,7 +172,7 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
 
       {/* Legenda */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        {[['done', '✅ Fatto'], ['excused', '🛡️ Giustificato'], ['missed', '❌ Saltato'], ['open', '⏳ Oggi']].map(([s, label]) => (
+        {[['done', 'Fatto'], ['excused', 'Giustificato'], ['missed', 'Saltato'], ['open', 'Oggi']].map(([s, label]) => (
           <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: t.textSoft, fontWeight: 700 }}>
             <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: statusColor(s) }} />
             {label}

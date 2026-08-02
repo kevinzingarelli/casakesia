@@ -7,9 +7,22 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '14';
+export const CURRENT_VERSION = '15';
 
 export const CHANGELOG = [
+  {
+    version: '15',
+    date: '2026-08-02',
+    time: '19:30',
+    title: 'Nuovo look in stile iPhone, statistiche sui regali, app più veloce',
+    items: [
+      'NUOVO ASPETTO: via le emoji, dentro icone vere e pulite su tessere sfumate, come le categorie dell\'app Salute di iPhone. Vale per lavori, regali, traguardi, milestone e titoli delle sezioni',
+      'I vostri avatar ora sono l\'iniziale del nome nel vostro colore, come i contatti iPhone. Il colore si sceglie nelle Opzioni',
+      'In Stats c\'è la nuova sezione Regali: quanti richiesti, consegnati, percentuale di accettazione, chi chiede di più e il regalo più gettonato',
+      'L\'app si apre molto più in fretta: i grafici si scaricano solo quando apri Stats, non al primo avvio (quasi metà del peso in meno)',
+      'Sistemato il pulsante «Non posso» nelle richieste di regalo, che aveva un doppio bordo',
+    ],
+  },
   {
     version: '14',
     date: '2026-08-02',

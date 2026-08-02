@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 import {
   Home, ListChecks, History, BarChart3, Settings, Plus, Minus, Flame, Trophy, Sparkles,
   Trash2, Check, Pencil, X, RotateCcw, Crown, Volume2, VolumeX, Moon, Sun, Download,
@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase, TABLE, DATA_ROW_ID } from './supabaseClient';
 import {
-  theme, USER_EMOJIS, USER_COLORS, CHORE_EMOJIS, CATEGORIES,
+  theme, USER_COLORS, CHORE_EMOJIS, CATEGORIES,
   DEFAULT_CHORES, DEFAULT_USERS, LEVELS, ACHIEVEMENTS,
   todayStr, formatDate, formatTime, getLevel, computeStreak,
   pointsForEntry, choreNameForEntry, achievementContext, uid, startOfWeek,
@@ -17,13 +17,22 @@ import {
 } from './helpers';
 import { playCompletionSound, playAchievementSound, playLevelUpSound, vibrate, playPackPreview, SOUND_PACKS, DEFAULT_PACK } from './sounds';
 import { quoteOfTheDay } from './quotes';
-import StatsView from './StatsView';
-import WidgetScreen from './WidgetScreen';
-import ShareCard from './ShareCard';
 import HouseSvg from './HouseSvg';
-import StreakView from './StreakView';
 import GiftsView from './GiftsView';
+import StreakView from './StreakView';
 import { NewsModal, UpdateBanner, useUnreadNews } from './News';
+import { IconTile, Avatar, SectionTitle, hasIcon } from './icons';
+
+// Caricate solo quando servono: Stats porta con sé tutta la libreria dei
+// grafici (recharts), che da sola pesa più di metà dell'app. Così il primo
+// avvio sul telefono scarica solo ciò che serve alla Home.
+const StatsView = lazy(() => import('./StatsView'));
+const WidgetScreen = lazy(() => import('./WidgetScreen'));
+const ShareCard = lazy(() => import('./ShareCard'));
+
+function LazyFallback({ t }) {
+  return <div style={{ padding: '40px', textAlign: 'center', color: t.textSoft, fontSize: '14px' }}>Un attimo…</div>;
+}
 import {
   registerServiceWorker, currentSubscription, subscribeToPush, unsubscribeFromPush,
   sendPush, pushSupported, pushBlockedReason,
@@ -778,7 +787,11 @@ export default function App() {
       {error && <div style={{ background: '#FFE5E5', color: '#C0392B', fontSize: '12px', padding: '8px 16px', textAlign: 'center' }}>{error}</div>}
 
       {/* Share card modal */}
-      {showShare && <ShareCard data={data} choresById={choresById} totals={totals} streaks={streaks} t={t} season={season} onClose={() => setShowShare(false)} />}
+      {showShare && (
+        <Suspense fallback={null}>
+          <ShareCard data={data} choresById={choresById} totals={totals} streaks={streaks} t={t} season={season} onClose={() => setShowShare(false)} />
+        </Suspense>
+      )}
 
       {/* Confetti / toast */}
       {confetti && (
@@ -788,20 +801,20 @@ export default function App() {
               <span key={i} className="confetti-piece" style={{ left: `${(i - 2.5) * 26}px`, animationDelay: `${i * 0.05}s` }}>{e}</span>
             ))}
             <div className="pop-card display" style={{ background: t.card, borderRadius: '24px', padding: '20px 28px', boxShadow: '0 12px 30px rgba(45,42,74,0.25)', border: `3px solid ${confetti.user.color}` }}>
-              <div style={{ fontSize: '40px' }}>{confetti.chore.emoji}</div>
-              <div style={{ fontSize: '20px', fontWeight: 700, marginTop: '4px', color: t.text }}>+{confetti.points} punti!{confetti.count > 1 ? ` (×${confetti.count})` : ''}</div>
-              <div style={{ fontSize: '14px', color: t.textSoft, marginTop: '2px' }}>{confetti.user.emoji} {confetti.user.name}</div>
-              {confetti.retro && <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '4px' }}>📅 retrodatato al {parseLocalDate(confetti.retro).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</div>}
-              {confetti.dedicated && <div style={{ fontSize: '13px', color: confetti.user.color, marginTop: '6px', fontWeight: 700 }}>❤️ Dedicato a {confetti.dedicated.name}</div>}
+              <div style={{ display: 'flex', justifyContent: 'center' }}><IconTile emoji={confetti.chore.emoji} size={56} /></div>
+              <div style={{ fontSize: '20px', fontWeight: 700, marginTop: '8px', color: t.text }}>+{confetti.points} punti!{confetti.count > 1 ? ` (×${confetti.count})` : ''}</div>
+              <div style={{ fontSize: '14px', color: t.textSoft, marginTop: '2px' }}>{confetti.user.name}</div>
+              {confetti.retro && <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '4px' }}>Retrodatato al {parseLocalDate(confetti.retro).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</div>}
+              {confetti.dedicated && <div style={{ fontSize: '13px', color: confetti.user.color, marginTop: '6px', fontWeight: 700 }}>Dedicato a {confetti.dedicated.name} ❤</div>}
               {confetti.levelUp && (
                 <div className="pop-card achievement-toast" style={{ marginTop: '12px', background: confetti.user.color, borderRadius: '14px', padding: '10px 16px' }}>
                   <div style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>LIVELLO RAGGIUNTO</div>
-                  <div style={{ fontSize: '15px', fontWeight: 800, color: '#fff' }}>{confetti.levelUp.emoji} {confetti.levelUp.title}</div>
+                  <div style={{ fontSize: '15px', fontWeight: 800, color: '#fff' }}>{confetti.levelUp.title}</div>
                 </div>
               )}
               {confetti.achievement && !confetti.levelUp && (
                 <div className="pop-card achievement-toast" style={{ marginTop: '12px', background: t.sunny, borderRadius: '14px', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '24px' }}>{confetti.achievement.emoji}</span>
+                  <Trophy size={22} color="#946800" />
                   <div style={{ textAlign: 'left' }}>
                     <div style={{ fontSize: '11px', fontWeight: 700, color: '#946800' }}>NUOVO TRAGUARDO</div>
                     <div style={{ fontSize: '13px', fontWeight: 800, color: '#2D2A4A' }}>{confetti.achievement.title}</div>
@@ -837,7 +850,7 @@ export default function App() {
               {/* Hero section */}
               <div style={{ background: `linear-gradient(160deg, ${t.coral}22, ${t.lavender}22)`, borderRadius: '32px 32px 0 0', padding: '28px 24px 20px', textAlign: 'center', position: 'relative' }}>
                 <button onClick={() => setPickerChore(null)} style={{ position: 'absolute', top: '16px', right: '16px', background: t.line, border: 'none', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: t.textSoft }}><X size={16} /></button>
-                <div className="hero-emoji" style={{ fontSize: '72px', lineHeight: 1, display: 'block', marginBottom: '10px', filter: `drop-shadow(0 4px 16px ${t.coral}66)` }}>{pickerChore.emoji}</div>
+                <div className="hero-emoji" style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}><IconTile emoji={pickerChore.emoji} size={72} /></div>
                 <div className="display" style={{ fontSize: '24px', fontWeight: 700, color: t.text, marginBottom: '4px' }}>{pickerChore.name}</div>
                 <div style={{ fontSize: '15px', color: t.textSoft }}>
                   {pickerSelections.length === 0 ? 'Nessuna selezione' : <span style={{ color: t.coral, fontWeight: 800 }}>+{totalPts} punti</span>}
@@ -861,7 +874,7 @@ export default function App() {
                         return (
                           <button onClick={() => setPickerSelections(prev => on ? prev.filter(x => x !== 'parent') : [...prev, 'parent'])} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderRadius: t.radiusSm, border: `2px solid ${on ? t.coral : t.line}`, background: on ? (dark ? 'rgba(255,107,107,0.12)' : '#FFF0EE') : 'transparent', cursor: 'pointer', textAlign: 'left', minHeight: '52px', transition: 'all 0.15s' }}>
                             <div style={{ width: '26px', height: '26px', borderRadius: '8px', border: `2px solid ${on ? t.coral : t.line}`, background: on ? t.coral : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>{on && <Check size={16} color="#fff" />}</div>
-                            <span style={{ fontSize: '22px' }}>{pickerChore.emoji}</span>
+                            <IconTile emoji={pickerChore.emoji} size={32} />
                             <span style={{ flex: 1, fontSize: '15px', fontWeight: 800, color: t.text }}>{pickerChore.name}</span>
                             <span style={{ fontSize: '15px', fontWeight: 800, color: t.coral }}>+{pickerChore.points}</span>
                           </button>
@@ -873,7 +886,7 @@ export default function App() {
                         return (
                           <button key={sub.id} onClick={() => { vibrate(8); setPickerSelections(prev => on ? prev.filter(x => x !== sub.id) : [...prev, sub.id]); }} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderRadius: t.radiusSm, border: `2px solid ${on ? t.lavender : t.line}`, background: on ? (dark ? 'rgba(167,139,250,0.12)' : '#F0ECFF') : 'transparent', cursor: 'pointer', textAlign: 'left', minHeight: '52px', transition: 'all 0.15s' }}>
                             <div style={{ width: '26px', height: '26px', borderRadius: '8px', border: `2px solid ${on ? t.lavender : t.line}`, background: on ? t.lavender : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>{on && <Check size={16} color="#fff" />}</div>
-                            <span style={{ fontSize: '22px' }}>{sub.emoji || pickerChore.emoji}</span>
+                            <IconTile emoji={sub.emoji || pickerChore.emoji} size={32} />
                             <span style={{ flex: 1, fontSize: '15px', fontWeight: 700, color: t.text }}>{sub.name}</span>
                             <span style={{ fontSize: '15px', fontWeight: 800, color: t.lavender }}>+{sub.points}</span>
                           </button>
@@ -914,7 +927,7 @@ export default function App() {
                 {/* Dedica */}
                 {otherUser && (
                   <button onClick={() => setPickerDedicate((d) => !d)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: t.radiusSm, border: `2px solid ${pickerDedicate ? t.coral : t.line}`, background: pickerDedicate ? (dark ? 'rgba(255,107,107,0.15)' : '#FFF0EE') : t.card, color: pickerDedicate ? t.coral : t.textSoft, fontWeight: 700, fontSize: '13px', cursor: 'pointer', marginBottom: '14px' }}>
-                    <Heart size={16} fill={pickerDedicate ? t.coral : 'none'} /> {pickerDedicate ? `Dedicato a ${otherUser.name} ❤️` : `Dedica a ${otherUser.name}`}
+                    <Heart size={16} fill={pickerDedicate ? t.coral : 'none'} /> {pickerDedicate ? `Dedicato a ${otherUser.name}` : `Dedica a ${otherUser.name}`}
                   </button>
                 )}
 
@@ -922,11 +935,11 @@ export default function App() {
                 {me ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <button onClick={() => logSelection(pickerChore, pickerSelections, me, pickerCount, pickerDate, pickerDedicate)} disabled={pickerSelections.length === 0} style={{ background: pickerSelections.length === 0 ? t.line : me.color, border: 'none', borderRadius: '20px', padding: '18px', color: '#fff', fontFamily: t.fontDisplay, fontWeight: 700, fontSize: '18px', cursor: pickerSelections.length === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: pickerSelections.length === 0 ? 0.5 : 1 }}>
-                      <span style={{ fontSize: '24px' }}>{me.emoji}</span> L'ho fatto io
+                      <Check size={22} strokeWidth={3} /> L'ho fatto io
                     </button>
                     {otherUser && (
                       <button onClick={() => logSelection(pickerChore, pickerSelections, otherUser, pickerCount, pickerDate, false)} disabled={pickerSelections.length === 0} style={{ background: 'transparent', border: `2px solid ${otherUser.color}`, borderRadius: '20px', padding: '14px', color: otherUser.color, fontFamily: t.fontDisplay, fontWeight: 700, fontSize: '15px', cursor: pickerSelections.length === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: pickerSelections.length === 0 ? 0.5 : 1 }}>
-                        <span style={{ fontSize: '20px' }}>{otherUser.emoji}</span> L'ha fatto {otherUser.name}
+                        <Avatar user={otherUser} size={24} /> L'ha fatto {otherUser.name}
                       </button>
                     )}
                   </div>
@@ -934,7 +947,7 @@ export default function App() {
                   <div style={{ display: 'flex', gap: '12px' }}>
                     {data.users.map((u) => (
                       <button key={u.id} onClick={() => logSelection(pickerChore, pickerSelections, u, pickerCount, pickerDate, false)} disabled={pickerSelections.length === 0} style={{ flex: 1, background: pickerSelections.length === 0 ? t.line : u.color, border: 'none', borderRadius: '20px', padding: '18px 8px', color: '#fff', fontFamily: t.fontDisplay, fontWeight: 700, fontSize: '16px', cursor: pickerSelections.length === 0 ? 'default' : 'pointer', opacity: pickerSelections.length === 0 ? 0.5 : 1 }}>
-                        <div style={{ fontSize: '28px', marginBottom: '4px' }}>{u.emoji}</div>{u.name}
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '6px' }}><span style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(255,255,255,0.28)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800 }}>{u.name.charAt(0).toUpperCase()}</span></div>{u.name}
                       </button>
                     ))}
                   </div>
@@ -949,8 +962,8 @@ export default function App() {
             {/* Header */}
       <div style={{ padding: 'calc(20px + env(safe-area-inset-top)) 18px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
-          <h1 className="display" style={{ fontSize: '24px', fontWeight: 700, margin: 0, color: t.text }}>🏠 Casa Points</h1>
-          <p style={{ margin: '2px 0 0', color: t.textSoft, fontSize: '13px' }}>{me ? `Ciao ${me.name}! ${me.emoji}` : 'Dividetevi i lavori, raccogliete punti'}</p>
+          <h1 className="display" style={{ fontSize: '26px', fontWeight: 800, margin: 0, color: t.text, letterSpacing: '-0.02em' }}>Casa Points</h1>
+          <p style={{ margin: '2px 0 0', color: t.textSoft, fontSize: '13px' }}>{me ? `Ciao ${me.name}!` : 'Dividetevi i lavori, raccogliete punti'}</p>
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
           <button onClick={() => setShowNews(true)} className="nav-btn" style={{ position: 'relative', background: t.card, border: 'none', borderRadius: '12px', width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textSoft, cursor: 'pointer', boxShadow: cardShadow }}>
@@ -966,10 +979,13 @@ export default function App() {
       {/* Banner identità */}
       {!me && (
         <div className="slide-up" style={{ margin: '0 18px 12px', background: t.card, borderRadius: '16px', padding: '14px', boxShadow: cardShadow }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: t.text, marginBottom: '8px' }}>👋 Chi sei? (così segni più velocemente)</div>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: t.text, marginBottom: '8px' }}>Chi sei? (così segni più velocemente)</div>
           <div style={{ display: 'flex', gap: '8px' }}>
             {data.users.map((u) => (
-              <button key={u.id} onClick={() => setIdentity(u.id)} style={{ flex: 1, background: u.color, border: 'none', borderRadius: '12px', padding: '10px', color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}>{u.emoji} {u.name}</button>
+              <button key={u.id} onClick={() => setIdentity(u.id)} style={{ flex: 1, background: u.color, border: 'none', borderRadius: '14px', padding: '11px', color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,255,255,0.28)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 800 }}>{u.name.charAt(0).toUpperCase()}</span>
+                {u.name}
+              </button>
             ))}
           </div>
         </div>
@@ -979,7 +995,7 @@ export default function App() {
       {streakRisk && (
         <div className="slide-up wiggle" style={{ margin: '0 18px 12px', background: `linear-gradient(135deg, ${t.coral}, ${t.sunny})`, borderRadius: '16px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: cardShadow }}>
           <AlertTriangle size={22} color="#fff" />
-          <div style={{ fontSize: '13px', color: '#fff', fontWeight: 700 }}>Stai per perdere la tua serie di {streaks[me.id]} giorni! Fai un lavoro prima di mezzanotte 🔥</div>
+          <div style={{ fontSize: '13px', color: '#fff', fontWeight: 700 }}>Stai per perdere la tua serie di {streaks[me.id]} giorni! Fai un lavoro prima di mezzanotte</div>
         </div>
       )}
 
@@ -996,11 +1012,11 @@ export default function App() {
                 const onVacation = data.vacations?.[u.id] && todayStr() >= data.vacations[u.id].from && todayStr() <= data.vacations[u.id].to;
                 return (
                   <div key={u.id} style={{ flex: 1 }}>
-                    <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px', color: t.text }}>
-                      <span style={{ fontSize: '20px' }}>{u.emoji}</span> {u.name}
+                    <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '7px', color: t.text }}>
+                      <Avatar user={u} size={26} /> {u.name}
                       {me && me.id === u.id && <span style={{ fontSize: '10px', background: u.color, color: '#fff', borderRadius: '6px', padding: '1px 5px' }}>tu</span>}
                     </div>
-                    <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>{lvl.emoji} {lvl.title}</div>
+                    <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>{lvl.title}</div>
                     <div style={{ fontSize: '26px', fontWeight: 800, color: t.text }} className="display">{totals[u.id] || 0}</div>
                     <div style={{ height: '10px', background: t.line, borderRadius: '8px', marginTop: '8px', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${pct}%`, background: u.color, borderRadius: '8px', transition: 'width 0.6s cubic-bezier(0.34,1.56,0.64,1)' }} />
@@ -1029,7 +1045,7 @@ export default function App() {
                   {coupleGoalProgress.pct > 15 && <span style={{ fontSize: '10px', color: '#fff', fontWeight: 800 }}>{coupleGoalProgress.pct}%</span>}
                 </div>
               </div>
-              {coupleGoalProgress.pct >= 100 && <div style={{ fontSize: '13px', color: t.mint, fontWeight: 700, textAlign: 'center', marginTop: '8px' }}>🎉 Obiettivo raggiunto insieme!</div>}
+              {coupleGoalProgress.pct >= 100 && <div style={{ fontSize: '13px', color: t.mint, fontWeight: 700, textAlign: 'center', marginTop: '8px' }}>Obiettivo raggiunto insieme! 🎉</div>}
             </div>
           )}
           {!coupleGoalProgress && (
@@ -1043,11 +1059,11 @@ export default function App() {
             <HouseSvg score={health.score} t={t} size={104} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '11px', fontWeight: 800, color: t.textSoft, textTransform: 'uppercase', letterSpacing: '0.04em' }}>La casa è</div>
-              <div className="display" style={{ fontSize: '20px', fontWeight: 800, color: t.text, textTransform: 'capitalize' }}>{hState.label}{hState.sparkle ? ' ✨' : ''}</div>
+              <div className="display" style={{ fontSize: '20px', fontWeight: 800, color: t.text, textTransform: 'capitalize' }}>{hState.label}</div>
               <div style={{ height: '8px', background: t.line, borderRadius: '6px', overflow: 'hidden', marginTop: '10px' }}>
                 <div style={{ height: '100%', width: `${health.score}%`, background: health.color, borderRadius: '6px', transition: 'width 0.6s' }} />
               </div>
-              <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '6px' }}>{hState.sparkle ? 'Perfetta! Continuate così 🌟' : health.score < 35 ? 'Un paio di lavori e migliora subito' : 'Si mantiene bene'}</div>
+              <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '6px' }}>{hState.sparkle ? 'Perfetta! Continuate così' : health.score < 35 ? 'Un paio di lavori e migliora subito' : 'Si mantiene bene'}</div>
             </div>
           </div>
 
@@ -1058,7 +1074,7 @@ export default function App() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {dueChores.slice(0, 4).map(({ chore, rec }) => (
                   <div key={chore.id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ fontSize: '20px' }}>{chore.emoji}</div>
+                    <IconTile emoji={chore.emoji} size={36} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{chore.name}</div>
                       <div style={{ fontSize: '11px', color: rec.status === 'overdue' ? t.coral : t.textSoft, fontWeight: 700 }}>
@@ -1078,7 +1094,7 @@ export default function App() {
               <Gift size={26} color={unclaimedAchievedRewards.length > 0 ? '#fff' : t.lavender} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '14px', fontWeight: 800, color: unclaimedAchievedRewards.length > 0 ? '#fff' : t.text }}>
-                  {unclaimedAchievedRewards.length > 0 ? `${unclaimedAchievedRewards.length} ricompensa${unclaimedAchievedRewards.length > 1 ? 'e' : ''} da riscuotere! 🎁` : 'Ricompense'}
+                  {unclaimedAchievedRewards.length > 0 ? `${unclaimedAchievedRewards.length} ricompensa${unclaimedAchievedRewards.length > 1 ? 'e' : ''} da riscuotere!` : 'Ricompense'}
                 </div>
                 <div style={{ fontSize: '12px', color: unclaimedAchievedRewards.length > 0 ? 'rgba(255,255,255,0.9)' : t.textSoft }}>
                   {unclaimedAchievedRewards.length > 0 ? 'Tocca per vedere' : `${rewards.filter((r) => !r.claimed).length} attive`}
@@ -1106,31 +1122,31 @@ export default function App() {
           )}
 
           {/* Azioni rapide */}
-          <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Azioni rapide</div>
+          <SectionTitle icon={Zap} gradient="orange" t={t}>Azioni rapide</SectionTitle>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '18px' }}>
             {data.chores.slice(0, 6).map((c, i) => (
-              <button key={c.id} onClick={() => handleChoreClick(c)} className="quick-card slide-up" style={{ background: t.card, border: 'none', borderRadius: '18px', padding: '16px', textAlign: 'left', boxShadow: cardShadow, cursor: 'pointer', animationDelay: `${i * 0.04}s` }}>
-                <div style={{ fontSize: '24px' }}>{c.emoji}</div>
-                <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '4px', lineHeight: 1.2, color: t.text }}>{c.name}</div>
+              <button key={c.id} onClick={() => handleChoreClick(c)} className="quick-card slide-up" style={{ background: t.card, border: 'none', borderRadius: '18px', padding: '14px', textAlign: 'left', boxShadow: cardShadow, cursor: 'pointer', animationDelay: `${i * 0.04}s` }}>
+                <IconTile emoji={c.emoji} size={40} />
+                <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px', lineHeight: 1.2, color: t.text }}>{c.name}</div>
                 <div style={{ fontSize: '12px', color: '#D49A00', fontWeight: 700, marginTop: '2px' }}>+{c.points} pt</div>
               </button>
             ))}
           </div>
 
           {/* Ultime attività */}
-          <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Ultime attività</div>
+          <SectionTitle icon={Clock} gradient="indigo" t={t}>Ultime attività</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {data.log.length === 0 && <div style={{ background: t.card, borderRadius: '16px', padding: '16px', color: t.textSoft, fontSize: '14px', textAlign: 'center' }}>Ancora nessuna attività. Tocca un lavoro per iniziare! 🎯</div>}
+            {data.log.length === 0 && <div style={{ background: t.card, borderRadius: '16px', padding: '16px', color: t.textSoft, fontSize: '14px', textAlign: 'center' }}>Ancora nessuna attività. Tocca un lavoro per iniziare!</div>}
             {data.log.slice(0, 6).map((e, i) => {
               const u = data.users.find((x) => x.id === e.userId);
               const info = choreNameForEntry(e, choresById);
               const dedUser = e.dedicatedTo ? data.users.find((x) => x.id === e.dedicatedTo) : null;
               return (
                 <div key={e.id} className="slide-up" style={{ background: t.card, borderRadius: '16px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: cardShadow, animationDelay: `${i * 0.03}s` }}>
-                  <div style={{ fontSize: '22px' }}>{info.emoji}</div>
+                  <IconTile emoji={info.emoji} size={36} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{info.name} {info.parentName && <span style={{ fontSize: '11px', color: t.textSoft, fontWeight: 600 }}>· {info.parentEmoji} {info.parentName}</span>} {dedUser && <Heart size={11} color={t.coral} fill={t.coral} style={{ display: 'inline', verticalAlign: 'middle' }} />}</div>
-                    <div style={{ fontSize: '12px', color: t.textSoft }}>{u?.emoji} {u?.name} · {formatTime(e.timestamp)}{dedUser ? ` · per ${dedUser.name}` : ''}</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{info.name} {info.parentName && <span style={{ fontSize: '11px', color: t.textSoft, fontWeight: 600 }}>· {info.parentName}</span>} {dedUser && <Heart size={11} color={t.coral} fill={t.coral} style={{ display: 'inline', verticalAlign: 'middle' }} />}</div>
+                    <div style={{ fontSize: '12px', color: t.textSoft, display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: u?.color, display: 'inline-block' }} /> {u?.name} · {formatTime(e.timestamp)}{dedUser ? ` · per ${dedUser.name}` : ''}</div>
                   </div>
                   <div style={{ fontWeight: 800, color: u?.color }} className="display">+{pointsForEntry(e, choresById)}</div>
                 </div>
@@ -1146,7 +1162,9 @@ export default function App() {
           <div style={{ padding: '0 18px', marginBottom: '4px' }}>
             <button onClick={() => setTab('settings')} style={{ background: 'none', border: 'none', padding: 0, color: t.coral, fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>← Opzioni</button>
           </div>
-          <WidgetScreen data={data} choresById={choresById} totals={totals} streaks={streaks} me={me} t={t} dark={dark} health={health} />
+          <Suspense fallback={<LazyFallback t={t} />}>
+            <WidgetScreen data={data} choresById={choresById} totals={totals} streaks={streaks} me={me} t={t} dark={dark} health={health} />
+          </Suspense>
         </div>
       )}
 
@@ -1179,7 +1197,7 @@ export default function App() {
               <button onClick={addChore} style={{ width: '100%', marginTop: '8px', background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Aggiungi lavoro</button>
             </div>
           )}
-          <div style={{ fontSize: '11px', color: t.textSoft, marginBottom: '10px', background: t.card, borderRadius: t.radiusSm, padding: '10px 12px' }}>💡 Cambiando i punti di un lavoro, <strong>tutto lo storico si ricalcola</strong> automaticamente.</div>
+          <div style={{ fontSize: '11px', color: t.textSoft, marginBottom: '10px', background: t.card, borderRadius: t.radiusSm, padding: '10px 12px' }}>Cambiando i punti di un lavoro, <strong>tutto lo storico si ricalcola</strong> automaticamente.</div>
 
           {/* Ricerca */}
           <div style={{ position: 'relative', marginBottom: '10px' }}>
@@ -1206,7 +1224,7 @@ export default function App() {
                 <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
                   {recent.map((c) => (
                     <button key={c.id} onClick={() => handleChoreClick(c)} className="quick-card" style={{ flexShrink: 0, background: t.card, border: 'none', borderRadius: t.radiusSm, padding: '10px 14px', boxShadow: cardShadow, cursor: 'pointer', textAlign: 'center', minWidth: '88px' }}>
-                      <div style={{ fontSize: '24px' }}>{c.emoji}</div>
+                      <div style={{ display: 'flex', justifyContent: 'center' }}><IconTile emoji={c.emoji} size={36} /></div>
                       <div style={{ fontSize: '11px', fontWeight: 700, marginTop: '4px', color: t.text, lineHeight: 1.1 }}>{c.name.length > 16 ? c.name.slice(0, 15) + '…' : c.name}</div>
                       <div style={{ fontSize: '11px', color: t.coral, fontWeight: 800, marginTop: '2px' }}>+{c.points}</div>
                     </button>
@@ -1248,7 +1266,7 @@ export default function App() {
             {['all', ...data.users.map((u) => u.id)].map((f) => {
               const u = data.users.find((x) => x.id === f);
               const active = historyFilter === f;
-              return <button key={f} onClick={() => setHistoryFilter(f)} style={{ flex: 1, padding: '8px', borderRadius: '12px', border: 'none', fontWeight: 700, fontSize: '13px', cursor: 'pointer', background: active ? (u ? u.color : t.coral) : t.card, color: active ? '#fff' : t.textSoft }}>{u ? `${u.emoji} ${u.name}` : 'Tutti'}</button>;
+              return <button key={f} onClick={() => setHistoryFilter(f)} style={{ flex: 1, padding: '8px', borderRadius: '12px', border: 'none', fontWeight: 700, fontSize: '13px', cursor: 'pointer', background: active ? (u ? u.color : t.coral) : t.card, color: active ? '#fff' : t.textSoft }}>{u ? u.name : 'Tutti'}</button>;
             })}
           </div>
           <div style={{ display: 'flex', gap: '6px', marginBottom: '14px', flexWrap: 'wrap' }}>
@@ -1286,10 +1304,10 @@ export default function App() {
                         idx++;
                         return (
                           <div key={e.id} className={removingIds.includes(e.id) ? 'slide-out' : 'slide-up'} style={{ background: t.card, borderRadius: t.radiusSm, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: cardShadow, animationDelay: removingIds.includes(e.id) ? '0s' : `${Math.min(idx, 10) * 0.02}s` }}>
-                            <div style={{ fontSize: '22px' }}>{info.emoji}</div>
+                            <IconTile emoji={info.emoji} size={36} />
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{info.name} {info.parentName && <span style={{ fontSize: '11px', color: t.textSoft, fontWeight: 600 }}>· {info.parentEmoji} {info.parentName}</span>} {dedUser && <Heart size={11} color={t.coral} fill={t.coral} style={{ display: 'inline', verticalAlign: 'middle' }} />}</div>
-                              <div style={{ fontSize: '12px', color: t.textSoft }}>{u?.emoji} {u?.name} · {formatTime(e.timestamp)}{dedUser ? ` · ❤️ ${dedUser.name}` : ''}</div>
+                              <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{info.name} {info.parentName && <span style={{ fontSize: '11px', color: t.textSoft, fontWeight: 600 }}>· {info.parentName}</span>} {dedUser && <Heart size={11} color={t.coral} fill={t.coral} style={{ display: 'inline', verticalAlign: 'middle' }} />}</div>
+                              <div style={{ fontSize: '12px', color: t.textSoft, display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: u?.color, display: 'inline-block' }} /> {u?.name} · {formatTime(e.timestamp)}{dedUser ? ` · per ${dedUser.name}` : ''}</div>
                             </div>
                             <div style={{ fontWeight: 800, color: u?.color }} className="display">+{pointsForEntry(e, choresById)}</div>
                             <button onClick={() => removeEntry(e.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><Trash2 size={16} /></button>
@@ -1315,7 +1333,11 @@ export default function App() {
       )}
 
       {/* ===== STATS ===== */}
-      {tab === 'stats' && <StatsView data={data} choresById={choresById} t={t} dark={dark} />}
+      {tab === 'stats' && (
+        <Suspense fallback={<LazyFallback t={t} />}>
+          <StatsView data={data} choresById={choresById} t={t} dark={dark} />
+        </Suspense>
+      )}
 
       {/* ===== IMPOSTAZIONI ===== */}
       {tab === 'settings' && (
@@ -1396,7 +1418,7 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
         <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '10px' }}>Scegli chi sei: i lavori che segni saranno automaticamente tuoi.</div>
         <div style={{ display: 'flex', gap: '8px' }}>
           {data.users.map((u) => (
-            <button key={u.id} onClick={() => setIdentity(u.id)} style={{ flex: 1, background: identity === u.id ? u.color : 'transparent', border: `2px solid ${u.color}`, borderRadius: '12px', padding: '10px', color: identity === u.id ? '#fff' : u.color, fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}>{u.emoji} {u.name} {identity === u.id ? '✓' : ''}</button>
+            <button key={u.id} onClick={() => setIdentity(u.id)} style={{ flex: 1, background: identity === u.id ? u.color : 'transparent', border: `2px solid ${u.color}`, borderRadius: '12px', padding: '10px', color: identity === u.id ? '#fff' : u.color, fontWeight: 700, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>{u.name} {identity === u.id && <Check size={15} strokeWidth={3} />}</button>
           ))}
         </div>
         {me && <button onClick={() => setIdentity(null)} style={{ width: '100%', marginTop: '8px', background: 'transparent', border: 'none', color: t.textSoft, fontSize: '12px', cursor: 'pointer' }}>Rimuovi identità</button>}
@@ -1408,12 +1430,10 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
         {data.users.map((u) => (
           <div key={u.id} style={{ background: t.card, borderRadius: '18px', padding: '14px', boxShadow: cardShadow }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-              <div style={{ fontSize: '28px' }}>{u.emoji}</div>
+              <Avatar user={u} size={40} />
               <input value={u.name} onChange={(e) => updateUser(u.id, { name: e.target.value })} className="display" style={{ flex: 1, border: `1px solid ${t.line}`, borderRadius: '10px', padding: '8px 10px', fontSize: '15px', fontWeight: 700 }} />
             </div>
-            <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>Avatar</div>
-            <EmojiPicker options={USER_EMOJIS} value={u.emoji} onChange={(em) => updateUser(u.id, { emoji: em })} t={t} />
-            <div style={{ fontSize: '12px', color: t.textSoft, margin: '10px 0 6px' }}>Colore</div>
+            <div style={{ fontSize: '12px', color: t.textSoft, margin: '10px 0 6px' }}>Colore (è anche il tuo avatar)</div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               {USER_COLORS.map((color) => <button key={color} onClick={() => updateUser(u.id, { color })} style={{ width: '32px', height: '32px', borderRadius: '50%', background: color, border: u.color === color ? `3px solid ${t.text}` : '3px solid transparent', cursor: 'pointer' }} />)}
             </div>
@@ -1500,10 +1520,10 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
       {/* Preferenze */}
       <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Preferenze</div>
       <div style={{ background: t.card, borderRadius: t.radius, padding: '4px 14px', boxShadow: cardShadow, marginBottom: '20px' }}>
-        <ToggleRow label="🔊 Suoni" value={soundOn} onChange={() => setSoundOn((s) => !s)} t={t} />
-        <ToggleRow label="🌙 Tema scuro" value={!!dark} onChange={() => setDark((d) => !d)} t={t} />
-        <ToggleRow label={`${season.emoji} Tema stagionale (${season.name})`} value={seasonal} onChange={() => setSeasonal((s) => !s)} t={t} />
-        <ToggleRow label="⚠️ Penalità per lavori dimenticati" value={penaltiesOn} onChange={togglePenalties} t={t} last />
+        <ToggleRow label="Suoni" value={soundOn} onChange={() => setSoundOn((s) => !s)} t={t} />
+        <ToggleRow label="Tema scuro" value={!!dark} onChange={() => setDark((d) => !d)} t={t} />
+        <ToggleRow label={`Tema stagionale (${season.name})`} value={seasonal} onChange={() => setSeasonal((s) => !s)} t={t} />
+        <ToggleRow label="Penalità per lavori dimenticati" value={penaltiesOn} onChange={togglePenalties} t={t} last />
       </div>
       {penaltiesOn && <div style={{ fontSize: '11px', color: t.textSoft, marginBottom: '20px', background: t.card, borderRadius: t.radiusSm, padding: '10px 12px' }}>Con le penalità attive, dimenticare a lungo i lavori chiave abbassa la "salute della casa" più velocemente.</div>}
 
@@ -1606,11 +1626,15 @@ function ToggleRow({ label, value, onChange, t, last }) {
   );
 }
 
-function EmojiPicker({ options, value, onChange, t }) {
+// Selettore di icone: il valore salvato resta l'emoji (chiave dei dati),
+// ma a schermo si vede l'icona pulita corrispondente.
+function EmojiPicker({ options, value, onChange, t, kind = 'chore' }) {
   return (
-    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', maxHeight: '140px', overflowY: 'auto' }}>
+    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', maxHeight: '150px', overflowY: 'auto' }}>
       {options.map((em) => (
-        <button key={em} onClick={() => onChange(em)} style={{ width: '38px', height: '38px', fontSize: '19px', borderRadius: '10px', border: value === em ? `2px solid ${t.coral}` : `1px solid ${t.line}`, background: value === em ? (t.card === '#FFFFFF' ? '#FFF0EE' : 'rgba(255,107,107,0.15)') : t.card, cursor: 'pointer' }}>{em}</button>
+        <button key={em} onClick={() => onChange(em)} style={{ width: '42px', height: '42px', padding: 0, borderRadius: '12px', border: value === em ? `2.5px solid ${t.coral}` : '2.5px solid transparent', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <IconTile emoji={em} kind={kind} size={34} />
+        </button>
       ))}
     </div>
   );
@@ -1674,7 +1698,7 @@ function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, onLogSubtas
   return (
     <div style={{ background: t.card, borderRadius: t.radiusSm, padding: '12px 14px', boxShadow: t.shadow }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{ fontSize: '24px' }}>{chore.emoji}</div>
+        <IconTile emoji={chore.emoji} size={40} />
         <div style={{ flex: 1 }} onClick={onLog} role="button">
           <div style={{ fontSize: '14px', fontWeight: 700, color: t.text, display: 'flex', alignItems: 'center', gap: '6px' }}>
             {chore.name}
@@ -1694,9 +1718,9 @@ function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, onLogSubtas
       {subtasks.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${t.line}` }}>
           {subtasks.map((sub) => (
-            <button key={sub.id} onClick={() => onLogSubtask(sub)} className="wiggle" style={{ background: 'transparent', border: `1.5px solid ${t.line}`, borderRadius: '20px', padding: '7px 12px', fontSize: '12.5px', fontWeight: 700, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <Check size={13} color={t.lavender} />
-              <span>{sub.emoji || chore.emoji} {sub.name}</span>
+            <button key={sub.id} onClick={() => onLogSubtask(sub)} className="wiggle" style={{ background: 'transparent', border: `1.5px solid ${t.line}`, borderRadius: '20px', padding: '6px 12px 6px 7px', fontSize: '12.5px', fontWeight: 700, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <IconTile emoji={sub.emoji || chore.emoji} size={22} radius={7} />
+              <span>{sub.name}</span>
               <span style={{ color: t.lavender, fontWeight: 800 }}>+{sub.points}</span>
             </button>
           ))}

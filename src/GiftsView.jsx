@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Gift, X, Check, Plus, Heart, Trash2, Clock, Sparkles, Pencil, Ticket } from 'lucide-react';
 import { GIFT_EMOJIS, GIFT_SUGGESTIONS, GIFT_STATUS, giftDayLabel, giftRemaining, todayStr } from './helpers';
+import { IconTile, Avatar } from './icons';
 
 const emptyDraft = { name: '', emoji: '🎁', hasLimit: false, monthlyLimit: 3 };
 
@@ -89,16 +90,16 @@ export default function GiftsView({
     return (
       <div style={{ ...card, marginBottom: '10px', opacity: muted ? 0.75 : 1 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '11px' }}>
-          <div style={{ fontSize: '28px', lineHeight: 1 }}>{r.snapshotEmoji}</div>
+          <IconTile emoji={r.snapshotEmoji} kind="gift" size={40} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '14px', fontWeight: 800, color: t.text }}>{r.snapshotName}</div>
-            <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '2px' }}>
-              {from?.emoji} {from?.name} → {to?.emoji} {to?.name} · <strong style={{ color: t.coral }}>{giftDayLabel(r.date)}</strong>
+            <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <Avatar user={from} size={16} /> {from?.name} → <Avatar user={to} size={16} /> {to?.name} · <strong style={{ color: t.coral }}>{giftDayLabel(r.date)}</strong>
             </div>
             {r.note && <div style={{ fontSize: '12px', color: t.text, marginTop: '6px', fontStyle: 'italic' }}>« {r.note} »</div>}
             {r.replyNote && <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '6px' }}>Risposta: « {r.replyNote} »</div>}
           </div>
-          <div style={{ fontSize: '11px', color: t.textSoft, fontWeight: 700, whiteSpace: 'nowrap' }}>{st.emoji} {st.label}</div>
+          <div style={{ fontSize: '11px', fontWeight: 800, whiteSpace: 'nowrap', padding: '3px 8px', borderRadius: '8px', background: r.status === 'accepted' || r.status === 'done' ? `${t.mint}22` : r.status === 'declined' ? `${t.coral}22` : `${t.sunny}33`, color: r.status === 'accepted' || r.status === 'done' ? t.mint : r.status === 'declined' ? t.coral : '#B8860B' }}>{st.label}</div>
         </div>
         {children && <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>{children}</div>}
       </div>
@@ -115,7 +116,7 @@ export default function GiftsView({
     return (
       <div className="fade-in" style={{ padding: '0 18px' }}>
         <div style={{ ...card, textAlign: 'center', padding: '30px 20px', color: t.textSoft, fontSize: '14px' }}>
-          <div style={{ fontSize: '38px', marginBottom: '10px' }}>🎁</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}><IconTile emoji="🎁" kind="gift" size={52} /></div>
           Scegli chi sei qui sopra per poter chiedere e ricevere regali.
         </div>
       </div>
@@ -138,9 +139,7 @@ export default function GiftsView({
           {toAnswer.map((r) => (
             <RequestRow key={r.id} r={r}>
               <button onClick={() => onRespondGift(r.id, true, '')} style={btn(t.mint, '#fff')}><Check size={15} /> Accetto</button>
-              <button onClick={() => { setDeclining(r); setDeclineNote(''); }} style={btn('transparent', t.textSoft)}>
-                <span style={{ border: `1.5px solid ${t.line}`, borderRadius: '10px', padding: '9px 12px', width: '100%' }}>Non posso</span>
-              </button>
+              <button onClick={() => { setDeclining(r); setDeclineNote(''); }} style={{ ...btn('transparent', t.textSoft), border: `1.5px solid ${t.line}` }}>Non posso</button>
             </RequestRow>
           ))}
         </>
@@ -181,7 +180,7 @@ export default function GiftsView({
           return (
             <div key={g.id} style={{ ...card, display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
-                <div style={{ fontSize: '28px' }}>{g.emoji}</div>
+                <IconTile emoji={g.emoji} kind="gift" size={40} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '14px', fontWeight: 700, color: t.text }}>{g.name}</div>
                   {g.monthlyLimit && (
@@ -212,7 +211,9 @@ export default function GiftsView({
           <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Es. Colazione a letto" style={{ width: '100%', padding: '11px', borderRadius: '11px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '10px', fontFamily: 'inherit', background: t.card, color: t.text }} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
             {GIFT_EMOJIS.map((em) => (
-              <button key={em} onClick={() => setDraft({ ...draft, emoji: em })} style={{ fontSize: '20px', padding: '5px 7px', borderRadius: '9px', border: draft.emoji === em ? `2px solid ${t.coral}` : `1px solid ${t.line}`, background: 'transparent', cursor: 'pointer' }}>{em}</button>
+              <button key={em} onClick={() => setDraft({ ...draft, emoji: em })} style={{ width: '42px', height: '42px', padding: 0, borderRadius: '12px', border: draft.emoji === em ? `2.5px solid ${t.coral}` : '2.5px solid transparent', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <IconTile emoji={em} kind="gift" size={34} />
+              </button>
             ))}
           </div>
 
@@ -248,7 +249,7 @@ export default function GiftsView({
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px' }}>
               {free.slice(0, 8).map((s) => (
                 <button key={s.name} onClick={() => onAddGift(s)} style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: '20px', padding: '8px 12px', fontSize: '12.5px', fontWeight: 700, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', boxShadow: cardShadow }}>
-                  <Plus size={13} color={t.textSoft} /> {s.emoji} {s.name}
+                  <Plus size={13} color={t.textSoft} /> <IconTile emoji={s.emoji} kind="gift" size={20} radius={6} /> {s.name}
                 </button>
               ))}
             </div>
@@ -271,9 +272,9 @@ export default function GiftsView({
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,74,0.55)', zIndex: 70, display: 'flex', alignItems: 'flex-end' }} onClick={() => setRequesting(null)}>
           <div className="picker-sheet" style={{ background: t.card, width: '100%', borderRadius: '28px 28px 0 0', padding: '24px 20px calc(24px + env(safe-area-inset-bottom))', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ textAlign: 'center', marginBottom: '18px' }}>
-              <div className="hero-emoji" style={{ fontSize: '58px', lineHeight: 1, marginBottom: '8px' }}>{requesting.emoji}</div>
+              <div className="hero-emoji" style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}><IconTile emoji={requesting.emoji} kind="gift" size={64} /></div>
               <div className="display" style={{ fontSize: '20px', fontWeight: 800, color: t.text }}>{requesting.name}</div>
-              <div style={{ fontSize: '13px', color: t.textSoft, marginTop: '3px' }}>Lo chiedi a {otherUser.emoji} {otherUser.name}</div>
+              <div style={{ fontSize: '13px', color: t.textSoft, marginTop: '3px' }}>Lo chiedi a {otherUser.name}</div>
             </div>
 
             <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, marginBottom: '9px' }}>Per quando?</div>
