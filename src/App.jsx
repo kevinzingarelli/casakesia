@@ -13,7 +13,7 @@ import {
   pointsForEntry, choreNameForEntry, achievementContext, uid, startOfWeek,
   houseHealth, motivationalMessage, currentSeason,
   houseState, recurringStatus, rewardAchieved, recentChores, groupByDay, computeWeekWins,
-  mergeData, sameData, cloneData, parseLocalDate, DEFAULT_GIFTS,
+  mergeData, sameData, cloneData, parseLocalDate, DEFAULT_GIFTS, giftDayLabel,
 } from './helpers';
 import { playCompletionSound, playAchievementSound, playLevelUpSound, vibrate, playPackPreview, SOUND_PACKS, DEFAULT_PACK } from './sounds';
 import { quoteOfTheDay } from './quotes';
@@ -24,8 +24,12 @@ import HouseSvg from './HouseSvg';
 import StreakView from './StreakView';
 import GiftsView from './GiftsView';
 import { NewsModal, UpdateBanner, useUnreadNews } from './News';
+import {
+  registerServiceWorker, currentSubscription, subscribeToPush, unsubscribeFromPush,
+  sendPush, pushSupported, pushBlockedReason,
+} from './push';
 
-const DEFAULT_DATA = { users: DEFAULT_USERS, chores: DEFAULT_CHORES, log: [], version: 8, coupleGoal: null, vacations: {}, penaltiesOn: false, customCategories: [], categories: [...CATEGORIES], rewards: [], savedQuotes: [], excused: {}, gifts: [...DEFAULT_GIFTS], giftRequests: [] };
+const DEFAULT_DATA = { users: DEFAULT_USERS, chores: DEFAULT_CHORES, log: [], version: 9, coupleGoal: null, vacations: {}, penaltiesOn: false, customCategories: [], categories: [...CATEGORIES], rewards: [], savedQuotes: [], excused: {}, gifts: [...DEFAULT_GIFTS], giftRequests: [], pushSubscriptions: [] };
 
 const LS_IDENTITY = 'casa-points-identity';
 const LS_SOUND = 'casa-points-sound';
@@ -77,6 +81,9 @@ export default function App() {
   const [soundPack, setSoundPack] = useState(() => loadLS(LS_SOUNDPACK, DEFAULT_PACK));
   const [showNews, setShowNews] = useState(false);
   const [unreadNews, refreshUnread] = useUnreadNews();
+  const [pushSub, setPushSub] = useState(null);      // iscrizione di QUESTO telefono
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMsg, setPushMsg] = useState(null);
   const dataRef = useRef(null);
   const saveTimer = useRef(null);
   const baseRef = useRef(null);       // ultimo stato confermato dal server
@@ -102,6 +109,19 @@ export default function App() {
   useEffect(() => { saveLS(LS_SEASONAL, seasonal); }, [seasonal]);
   useEffect(() => { saveLS(LS_STYLE, style); }, [style]);
   useEffect(() => { saveLS(LS_SOUNDPACK, soundPack); }, [soundPack]);
+
+  // Registra il service worker (serve solo alle notifiche: non mette nulla
+  // in cache) e recupera l'eventuale iscrizione già fatta su questo telefono.
+  useEffect(() => {
+    if (!pushSupported()) return;
+    let alive = true;
+    (async () => {
+      await registerServiceWorker();
+      const sub = await currentSubscription();
+      if (alive) setPushSub(sub);
+    })();
+    return () => { alive = false; };
+  }, []);
 
   const choresById = useMemo(() => {
     const m = {};
@@ -165,6 +185,11 @@ export default function App() {
           value.gifts = (value.gifts && value.gifts.length) ? value.gifts : cloneData(DEFAULT_GIFTS);
           value.giftRequests = value.giftRequests || [];
           value.version = 8;
+        }
+        if (value.version < 9) {
+          // Telefoni iscritti alle notifiche push
+          value.pushSubscriptions = value.pushSubscriptions || [];
+          value.version = 9;
         }
     }
     return value;
@@ -445,6 +470,65 @@ export default function App() {
   const removeReward = (id) => save({ ...dataRef.current, rewards: (dataRef.current.rewards || []).filter((r) => r.id !== id) });
   const claimReward = (id) => save({ ...dataRef.current, rewards: (dataRef.current.rewards || []).map((r) => (r.id === id ? { ...r, claimed: true, claimedAt: todayStr(), claimedBy: identity } : r)) });
 
+  // ---- Notifiche push ----
+  // L'iscrizione di ogni telefono finisce nel documento condiviso, così
+  // l'altra persona (cioè il server, per suo conto) sa dove spedire.
+  const enablePush = async () => {
+    if (!me) { setPushMsg('Scegli prima chi sei, in cima alla schermata.'); return; }
+    setPushBusy(true); setPushMsg(null);
+    const res = await subscribeToPush();
+    setPushBusy(false);
+    if (!res.ok) {
+      const msgs = {
+        'negato': 'Le notifiche sono bloccate nelle impostazioni del telefono. Vai in Impostazioni → Casa Points → Notifiche per riattivarle.',
+        'non-supportato': 'Questo telefono non supporta le notifiche.',
+        'no-sw': 'Non riesco ad avviare il servizio delle notifiche.',
+      };
+      setPushMsg(msgs[res.reason] || 'Non sono riuscito ad attivarle. Riprova.');
+      return;
+    }
+    const sub = res.subscription;
+    const others = (dataRef.current.pushSubscriptions || []).filter((s) => s.endpoint !== sub.endpoint);
+    save({
+      ...dataRef.current,
+      pushSubscriptions: [...others, {
+        endpoint: sub.endpoint,
+        keys: sub.keys,
+        userId: me.id,
+        createdAt: new Date().toISOString(),
+      }],
+    });
+    setPushSub(sub);
+    setPushMsg('Fatto! Riceverai una notifica quando ti chiedono un regalo.');
+  };
+
+  const disablePush = async () => {
+    setPushBusy(true); setPushMsg(null);
+    const removed = await unsubscribeFromPush();
+    const endpoint = (removed && removed.endpoint) || (pushSub && pushSub.endpoint);
+    if (endpoint) {
+      save({
+        ...dataRef.current,
+        pushSubscriptions: (dataRef.current.pushSubscriptions || []).filter((s) => s.endpoint !== endpoint),
+      });
+    }
+    setPushSub(null);
+    setPushBusy(false);
+    setPushMsg('Notifiche disattivate su questo telefono.');
+  };
+
+  // Spedisce e, se il server segnala iscrizioni ormai morte, le ripulisce
+  const notify = async (toUserId, title, message) => {
+    const res = await sendPush({ toUserId, title, message, url: '/', tag: 'regali' });
+    if (res && res.failed && res.failed.length) {
+      const dead = new Set(res.failed);
+      save({
+        ...dataRef.current,
+        pushSubscriptions: (dataRef.current.pushSubscriptions || []).filter((s) => !dead.has(s.endpoint)),
+      });
+    }
+  };
+
   // Regali: catalogo condiviso + richieste da una persona all'altra
   const addGift = (gift) => {
     const name = (gift.name || '').trim();
@@ -471,9 +555,12 @@ export default function App() {
     };
     save({ ...dataRef.current, giftRequests: [req, ...(dataRef.current.giftRequests || [])] });
     vibrate(15);
+    notify(otherUser.id, `${gift.emoji} ${me.name} ti ha chiesto un regalo`,
+      `${gift.name} · per ${giftDayLabel(date)}${note ? ` — «${note}»` : ''}`);
   };
 
   const respondGift = (id, accept, replyNote) => {
+    const req = (dataRef.current.giftRequests || []).find((r) => r.id === id);
     save({
       ...dataRef.current,
       giftRequests: (dataRef.current.giftRequests || []).map((r) => (r.id === id
@@ -482,9 +569,17 @@ export default function App() {
     });
     vibrate(accept ? [10, 30, 10] : 10);
     if (accept) playAchievementSound(soundOn, soundPack);
+    if (req && me) {
+      notify(req.fromUserId,
+        accept ? `💚 ${me.name} ha detto sì!` : `🙈 ${me.name} non può`,
+        accept
+          ? `${req.snapshotName} · per ${giftDayLabel(req.date)}`
+          : `${req.snapshotName}${replyNote ? ` — «${replyNote}»` : ''}`);
+    }
   };
 
   const giftDone = (id) => {
+    const req = (dataRef.current.giftRequests || []).find((r) => r.id === id);
     save({
       ...dataRef.current,
       giftRequests: (dataRef.current.giftRequests || []).map((r) => (r.id === id
@@ -493,6 +588,7 @@ export default function App() {
     });
     vibrate([10, 30, 10, 30, 10]);
     playLevelUpSound(soundOn, soundPack);
+    if (req && me) notify(req.fromUserId, `🎉 Regalo consegnato!`, `${req.snapshotEmoji} ${req.snapshotName}`);
   };
 
   const deleteGiftRequest = (id) => save({ ...dataRef.current, giftRequests: (dataRef.current.giftRequests || []).filter((r) => r.id !== id) });
@@ -1208,6 +1304,8 @@ export default function App() {
           onOpenWidgetPreview={() => setTab('widget')}
           soundPack={soundPack} setSoundPack={setSoundPack}
           onOpenNews={() => setShowNews(true)} unreadNews={unreadNews}
+          pushSub={pushSub} pushBusy={pushBusy} pushMsg={pushMsg}
+          onEnablePush={enablePush} onDisablePush={disablePush}
           savedCount={(data.savedQuotes || []).length}
         />
       )}
@@ -1260,7 +1358,7 @@ export default function App() {
 // COMPONENTI AUSILIARI
 // ============================================================
 
-function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, style, setStyle, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, renameCategory, removeCategory, choresUsingCategory, penaltiesOn, togglePenalties, vacations, setVacation, onOpenRewards, onOpenSavedQuotes, savedCount, onOpenWidgetPreview, soundPack, setSoundPack, onOpenNews, unreadNews }) {
+function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, style, setStyle, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, renameCategory, removeCategory, choresUsingCategory, penaltiesOn, togglePenalties, vacations, setVacation, onOpenRewards, onOpenSavedQuotes, savedCount, onOpenWidgetPreview, soundPack, setSoundPack, onOpenNews, unreadNews, pushSub, pushBusy, pushMsg, onEnablePush, onDisablePush }) {
   const [newCat, setNewCat] = useState('');
   const customCats = data.customCategories || [];
 
@@ -1382,6 +1480,46 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
         <ToggleRow label="⚠️ Penalità per lavori dimenticati" value={penaltiesOn} onChange={togglePenalties} t={t} last />
       </div>
       {penaltiesOn && <div style={{ fontSize: '11px', color: t.textSoft, marginBottom: '20px', background: t.card, borderRadius: t.radiusSm, padding: '10px 12px' }}>Con le penalità attive, dimenticare a lungo i lavori chiave abbassa la "salute della casa" più velocemente.</div>}
+
+      {/* Notifiche push */}
+      <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text, display: 'flex', alignItems: 'center', gap: '6px' }}><Bell size={16} color={t.coral} /> Notifiche sul telefono</div>
+      {(() => {
+        const blocked = pushBlockedReason();
+        const attive = !!pushSub;
+        if (blocked === 'ios-non-installata') {
+          return (
+            <div style={{ background: t.card, borderRadius: t.radiusSm, padding: '14px', boxShadow: cardShadow, marginBottom: '20px', fontSize: '13px', color: t.text, lineHeight: 1.5 }}>
+              📲 Su iPhone le notifiche funzionano solo se l'app è <strong>aggiunta alla schermata Home</strong>.<br />
+              <span style={{ color: t.textSoft, fontSize: '12.5px' }}>In Safari tocca <strong>Condividi</strong> → <strong>Aggiungi a Home</strong>, poi apri Casa Points dall'icona e torna qui.</span>
+            </div>
+          );
+        }
+        if (blocked === 'non-supportato') {
+          return (
+            <div style={{ background: t.card, borderRadius: t.radiusSm, padding: '14px', boxShadow: cardShadow, marginBottom: '20px', fontSize: '13px', color: t.textSoft }}>
+              Questo browser non supporta le notifiche.
+            </div>
+          );
+        }
+        return (
+          <div style={{ background: t.card, borderRadius: t.radiusSm, padding: '14px', boxShadow: cardShadow, marginBottom: '20px' }}>
+            <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '12px', lineHeight: 1.5 }}>
+              {attive
+                ? 'Attive su questo telefono: ricevi un avviso quando ti chiedono un regalo o rispondono a una tua richiesta.'
+                : 'Attivale per sapere subito quando ti chiedono un regalo, senza dover aprire l\'app.'}
+            </div>
+            <button
+              onClick={attive ? onDisablePush : onEnablePush}
+              disabled={pushBusy}
+              style={{ width: '100%', background: attive ? 'transparent' : t.coral, border: attive ? `1.5px solid ${t.line}` : 'none', color: attive ? t.textSoft : '#fff', borderRadius: '12px', padding: '13px', fontWeight: 800, fontSize: '14px', cursor: pushBusy ? 'default' : 'pointer', opacity: pushBusy ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px' }}
+            >
+              <Bell size={16} />
+              {pushBusy ? 'Un attimo…' : attive ? 'Disattiva su questo telefono' : 'Attiva le notifiche'}
+            </button>
+            {pushMsg && <div style={{ fontSize: '12.5px', color: t.text, marginTop: '10px', lineHeight: 1.5 }}>{pushMsg}</div>}
+          </div>
+        );
+      })()}
 
       {/* Suono del completamento */}
       <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text, display: 'flex', alignItems: 'center', gap: '6px' }}><Music size={16} color={t.lavender} /> Suono quando segni un lavoro</div>

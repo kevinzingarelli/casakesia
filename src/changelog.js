@@ -7,9 +7,21 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '11';
+export const CURRENT_VERSION = '12';
 
 export const CHANGELOG = [
+  {
+    version: '12',
+    date: '2026-08-02',
+    time: '14:30',
+    title: 'Notifiche sul telefono per i regali',
+    items: [
+      'Quando ti chiedono un regalo ora arriva una notifica sul telefono, senza dover tenere l\'app aperta. Arriva anche quando l\'altra persona accetta, rifiuta o ti consegna il regalo',
+      'Si attivano dalle Opzioni, una volta per telefono, con il pulsante «Attiva le notifiche»',
+      'IMPORTANTE su iPhone: le notifiche funzionano solo se l\'app è stata aggiunta alla schermata Home (Condividi → Aggiungi a Home) e aperta da lì. In Safari come sito normale iOS non le permette proprio',
+      'L\'icona dell\'app sulla schermata Home ora si vede come si deve: prima era in un formato che iPhone non sa disegnare',
+    ],
+  },
   {
     version: '11',
     date: '2026-08-02',

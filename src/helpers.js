@@ -666,7 +666,7 @@ export function cloneData(v) {
 }
 
 // Liste di oggetti e relativa chiave di identità
-const MERGE_LISTS = { log: 'id', chores: 'id', users: 'id', rewards: 'id', savedQuotes: 'text', gifts: 'id', giftRequests: 'id' };
+const MERGE_LISTS = { log: 'id', chores: 'id', users: 'id', rewards: 'id', savedQuotes: 'text', gifts: 'id', giftRequests: 'id', pushSubscriptions: 'endpoint' };
 // Mappe annidate (per utente, per data…)
 const MERGE_MAPS = ['excused', 'vacations'];
 
