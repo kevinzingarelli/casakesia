@@ -13,7 +13,7 @@ import {
   pointsForEntry, choreNameForEntry, achievementContext, uid, startOfWeek,
   houseHealth, motivationalMessage, currentSeason,
   houseState, recurringStatus, rewardAchieved, recentChores, groupByDay, computeWeekWins,
-  mergeData, sameData, cloneData, parseLocalDate, DEFAULT_GIFTS, giftDayLabel,
+  mergeData, sameData, cloneData, parseLocalDate, DEFAULT_GIFTS, giftDayLabel, giftRemaining,
 } from './helpers';
 import { playCompletionSound, playAchievementSound, playLevelUpSound, vibrate, playPackPreview, SOUND_PACKS, DEFAULT_PACK } from './sounds';
 import { quoteOfTheDay } from './quotes';
@@ -546,12 +546,27 @@ export default function App() {
     if (!name) return;
     const existing = dataRef.current.gifts || [];
     if (existing.some((g) => g.name.toLowerCase() === name.toLowerCase())) return;
-    save({ ...dataRef.current, gifts: [...existing, { id: `gift-${uid()}`, name, emoji: gift.emoji || '🎁' }] });
+    const limit = Number(gift.monthlyLimit) || 0;
+    save({ ...dataRef.current, gifts: [...existing, { id: `gift-${uid()}`, name, emoji: gift.emoji || '🎁', monthlyLimit: limit > 0 ? limit : null }] });
+  };
+  const editGift = (id, patch) => {
+    const name = (patch.name || '').trim();
+    if (!name) return;
+    const limit = Number(patch.monthlyLimit) || 0;
+    save({
+      ...dataRef.current,
+      gifts: (dataRef.current.gifts || []).map((g) => (g.id === id
+        ? { ...g, name, emoji: patch.emoji || g.emoji, monthlyLimit: limit > 0 ? limit : null }
+        : g)),
+    });
   };
   const removeGift = (id) => save({ ...dataRef.current, gifts: (dataRef.current.gifts || []).filter((g) => g.id !== id) });
 
   const requestGift = (gift, date, note) => {
     if (!me || !otherUser) return;
+    // Difesa in profondità: l'interfaccia disabilita già il pulsante quando
+    // il buono mensile è esaurito, ma ricontrolliamo qui prima di salvare.
+    if (giftRemaining(gift, me.id, dataRef.current.giftRequests || [], date) === 0) return;
     const req = {
       id: `greq-${uid()}`,
       giftId: gift.id,
@@ -1294,7 +1309,7 @@ export default function App() {
       {tab === 'gifts' && (
         <GiftsView
           data={data} me={me} otherUser={otherUser} t={t} dark={dark} cardShadow={cardShadow}
-          onAddGift={addGift} onRemoveGift={removeGift} onRequestGift={requestGift}
+          onAddGift={addGift} onEditGift={editGift} onRemoveGift={removeGift} onRequestGift={requestGift}
           onRespondGift={respondGift} onGiftDone={giftDone} onDeleteRequest={deleteGiftRequest}
         />
       )}

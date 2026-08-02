@@ -185,6 +185,26 @@ export function giftDayLabel(dateStr) {
   return parseLocalDate(dateStr).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
+// Regali "buono mensile" (es. "3 massaggi al mese"): quante richieste di
+// QUESTO regalo ha già fatto fromUserId nel mese del giorno richiesto.
+// Contano pending/accepted/done — non declined, quella non consuma il buono.
+// Il mese è quello della DATA RICHIESTA (dateStr), non quello di oggi: così
+// prenotare per il mese prossimo non tocca il buono del mese corrente.
+export function giftUsesInMonth(giftId, fromUserId, giftRequests, dateStr) {
+  const month = dateStr.slice(0, 7); // "YYYY-MM"
+  return (giftRequests || []).filter((r) => (
+    r.giftId === giftId && r.fromUserId === fromUserId && r.status !== 'declined'
+    && String(r.date || '').slice(0, 7) === month
+  )).length;
+}
+
+// Quante richieste restano per quel regalo, in quel mese. null = illimitato.
+export function giftRemaining(gift, fromUserId, giftRequests, dateStr) {
+  if (!gift.monthlyLimit) return null;
+  const used = giftUsesInMonth(gift.id, fromUserId, giftRequests, dateStr);
+  return Math.max(0, gift.monthlyLimit - used);
+}
+
 export const DEFAULT_CHORES = [
   { id: 'c1', name: 'Lavare i piatti', emoji: '🍽️', points: 10, category: 'Cucina' },
   { id: 'c2', name: 'Lavastoviglie (carico/scarico)', emoji: '🫧', points: 8, category: 'Cucina' },

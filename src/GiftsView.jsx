@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Gift, X, Check, Plus, Heart, Trash2, Clock, Sparkles } from 'lucide-react';
-import { GIFT_EMOJIS, GIFT_SUGGESTIONS, GIFT_STATUS, giftDayLabel, todayStr } from './helpers';
+import { Gift, X, Check, Plus, Heart, Trash2, Clock, Sparkles, Pencil, Ticket } from 'lucide-react';
+import { GIFT_EMOJIS, GIFT_SUGGESTIONS, GIFT_STATUS, giftDayLabel, giftRemaining, todayStr } from './helpers';
+
+const emptyDraft = { name: '', emoji: '🎁', hasLimit: false, monthlyLimit: 3 };
 
 export default function GiftsView({
   data, me, otherUser, t, dark, cardShadow,
-  onAddGift, onRemoveGift, onRequestGift, onRespondGift, onGiftDone, onDeleteRequest,
+  onAddGift, onEditGift, onRemoveGift, onRequestGift, onRespondGift, onGiftDone, onDeleteRequest,
 }) {
   const [requesting, setRequesting] = useState(null);   // regalo scelto dal catalogo
   const [reqDate, setReqDate] = useState(todayStr());
@@ -12,7 +14,8 @@ export default function GiftsView({
   const [declining, setDeclining] = useState(null);     // richiesta che sto rifiutando
   const [declineNote, setDeclineNote] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [newGift, setNewGift] = useState({ name: '', emoji: '🎁' });
+  const [editingId, setEditingId] = useState(null);     // id del regalo in modifica, o null se sto aggiungendo
+  const [draft, setDraft] = useState(emptyDraft);
 
   const gifts = data.gifts || [];
   const requests = data.giftRequests || [];
@@ -50,6 +53,23 @@ export default function GiftsView({
     onRequestGift(requesting, reqDate, reqNote.trim());
     setRequesting(null);
   };
+
+  const openAdd = () => { setEditingId(null); setDraft(emptyDraft); setShowAdd(true); };
+  const openEdit = (g) => {
+    setEditingId(g.id);
+    setDraft({ name: g.name, emoji: g.emoji, hasLimit: !!g.monthlyLimit, monthlyLimit: g.monthlyLimit || 3 });
+    setShowAdd(true);
+  };
+  const saveDraft = () => {
+    if (!draft.name.trim()) return;
+    const payload = { name: draft.name, emoji: draft.emoji, monthlyLimit: draft.hasLimit ? draft.monthlyLimit : null };
+    if (editingId) onEditGift(editingId, payload);
+    else onAddGift(payload);
+    setShowAdd(false); setEditingId(null); setDraft(emptyDraft);
+  };
+
+  // Residuo del buono mensile per QUESTO regalo, per la data scelta nel foglio di richiesta
+  const remainingFor = (gift, dateStr) => (me ? giftRemaining(gift, me.id, requests, dateStr) : null);
 
   const userById = (id) => data.users.find((u) => u.id === id);
 
@@ -155,32 +175,64 @@ export default function GiftsView({
       {/* ---- Catalogo ---- */}
       {sectionTitle('Catalogo regali', <Gift size={16} color={t.coral} />)}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {gifts.map((g) => (
-          <div key={g.id} style={{ ...card, display: 'flex', alignItems: 'center', gap: '11px' }}>
-            <div style={{ fontSize: '28px' }}>{g.emoji}</div>
-            <div style={{ flex: 1, fontSize: '14px', fontWeight: 700, color: t.text }}>{g.name}</div>
-            <button onClick={() => onRemoveGift(g.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '6px' }}><Trash2 size={15} /></button>
-            <button onClick={() => openRequest(g)} disabled={!otherUser} style={{ background: otherUser ? t.coral : t.line, border: 'none', color: '#fff', borderRadius: '12px', padding: '10px 14px', fontWeight: 800, fontSize: '13px', cursor: otherUser ? 'pointer' : 'default' }}>Chiedi</button>
-          </div>
-        ))}
+        {gifts.map((g) => {
+          const remaining = remainingFor(g, todayStr());
+          const exhausted = remaining === 0;
+          return (
+            <div key={g.id} style={{ ...card, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
+                <div style={{ fontSize: '28px' }}>{g.emoji}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: t.text }}>{g.name}</div>
+                  {g.monthlyLimit && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', color: exhausted ? t.coral : t.textSoft, fontWeight: 700, marginTop: '2px' }}>
+                      <Ticket size={12} /> {remaining}/{g.monthlyLimit} questo mese
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => openEdit(g)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '6px' }}><Pencil size={15} /></button>
+                <button onClick={() => onRemoveGift(g.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '6px' }}><Trash2 size={15} /></button>
+                <button onClick={() => openRequest(g)} disabled={!otherUser || exhausted} style={{ background: (!otherUser || exhausted) ? t.line : t.coral, border: 'none', color: (!otherUser || exhausted) ? t.textSoft : '#fff', borderRadius: '12px', padding: '10px 14px', fontWeight: 800, fontSize: '13px', cursor: (!otherUser || exhausted) ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                  {exhausted ? 'Esaurito' : 'Chiedi'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Aggiungi un regalo */}
+      {/* Aggiungi / modifica un regalo */}
       {!showAdd ? (
-        <button onClick={() => setShowAdd(true)} style={{ width: '100%', marginTop: '10px', background: 'transparent', border: `1.5px dashed ${t.line}`, color: t.textSoft, borderRadius: '14px', padding: '13px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+        <button onClick={openAdd} style={{ width: '100%', marginTop: '10px', background: 'transparent', border: `1.5px dashed ${t.line}`, color: t.textSoft, borderRadius: '14px', padding: '13px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
           <Plus size={16} /> Aggiungi un regalo
         </button>
       ) : (
         <div style={{ ...card, marginTop: '10px' }}>
-          <input value={newGift.name} onChange={(e) => setNewGift({ ...newGift, name: e.target.value })} placeholder="Es. Colazione a letto" style={{ width: '100%', padding: '11px', borderRadius: '11px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '10px', fontFamily: 'inherit', background: t.card, color: t.text }} />
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, marginBottom: '10px' }}>{editingId ? 'Modifica regalo' : 'Nuovo regalo'}</div>
+          <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Es. Colazione a letto" style={{ width: '100%', padding: '11px', borderRadius: '11px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '10px', fontFamily: 'inherit', background: t.card, color: t.text }} />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
             {GIFT_EMOJIS.map((em) => (
-              <button key={em} onClick={() => setNewGift({ ...newGift, emoji: em })} style={{ fontSize: '20px', padding: '5px 7px', borderRadius: '9px', border: newGift.emoji === em ? `2px solid ${t.coral}` : `1px solid ${t.line}`, background: 'transparent', cursor: 'pointer' }}>{em}</button>
+              <button key={em} onClick={() => setDraft({ ...draft, emoji: em })} style={{ fontSize: '20px', padding: '5px 7px', borderRadius: '9px', border: draft.emoji === em ? `2px solid ${t.coral}` : `1px solid ${t.line}`, background: 'transparent', cursor: 'pointer' }}>{em}</button>
             ))}
           </div>
+
+          <button onClick={() => setDraft({ ...draft, hasLimit: !draft.hasLimit })} style={{ display: 'flex', alignItems: 'center', gap: '9px', width: '100%', background: 'transparent', border: 'none', padding: 0, marginBottom: draft.hasLimit ? '10px' : '14px', cursor: 'pointer' }}>
+            <div style={{ width: '38px', height: '22px', borderRadius: '11px', background: draft.hasLimit ? t.mint : t.line, position: 'relative', transition: 'background 0.15s', flexShrink: 0 }}>
+              <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '2px', left: draft.hasLimit ? '18px' : '2px', transition: 'left 0.15s' }} />
+            </div>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: t.text, display: 'flex', alignItems: 'center', gap: '5px' }}><Ticket size={14} color={t.lavender} /> Buono mensile (numero limitato al mese)</span>
+          </button>
+
+          {draft.hasLimit && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              <span style={{ fontSize: '13px', color: t.textSoft }}>Quante volte al mese:</span>
+              <input type="number" min="1" max="99" value={draft.monthlyLimit} onChange={(e) => setDraft({ ...draft, monthlyLimit: Math.max(1, Number(e.target.value) || 1) })} style={{ width: '64px', padding: '8px', borderRadius: '9px', border: `1px solid ${t.line}`, fontSize: '14px', fontWeight: 700, textAlign: 'center', background: t.card, color: t.text }} />
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={() => { setShowAdd(false); setNewGift({ name: '', emoji: '🎁' }); }} style={btn('transparent', t.textSoft)}>Annulla</button>
-            <button onClick={() => { if (!newGift.name.trim()) return; onAddGift(newGift); setNewGift({ name: '', emoji: '🎁' }); setShowAdd(false); }} style={btn(t.mint, '#fff')}>Aggiungi</button>
+            <button onClick={() => { setShowAdd(false); setEditingId(null); setDraft(emptyDraft); }} style={btn('transparent', t.textSoft)}>Annulla</button>
+            <button onClick={saveDraft} style={btn(t.mint, '#fff')}>{editingId ? 'Salva' : 'Aggiungi'}</button>
           </div>
         </div>
       )}
@@ -239,9 +291,20 @@ export default function GiftsView({
             <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, marginBottom: '7px' }}>Vuoi aggiungere qualcosa? (facoltativo)</div>
             <input value={reqNote} onChange={(e) => setReqNote(e.target.value)} placeholder="Es. dopo cena, se non sei stanca..." style={{ width: '100%', padding: '11px', borderRadius: '11px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '18px', fontFamily: 'inherit', background: t.card, color: t.text }} />
 
+            {(() => {
+              if (!requesting.monthlyLimit) return null;
+              const remaining = remainingFor(requesting, reqDate);
+              const mese = parseInt(reqDate.slice(5, 7), 10) === parseInt(todayStr().slice(5, 7), 10) ? 'questo mese' : 'in quel mese';
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: 700, color: remaining === 0 ? t.coral : t.textSoft, marginBottom: '14px', marginTop: '-8px' }}>
+                  <Ticket size={13} /> {remaining === 0 ? `Buono esaurito ${mese}` : `${remaining}/${requesting.monthlyLimit} rimasti ${mese}`}
+                </div>
+              );
+            })()}
+
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => setRequesting(null)} style={btn('transparent', t.textSoft)}>Annulla</button>
-              <button onClick={confirmRequest} style={btn(t.coral, '#fff')}><Gift size={16} /> Chiedi per {giftDayLabel(reqDate)}</button>
+              <button onClick={confirmRequest} disabled={remainingFor(requesting, reqDate) === 0} style={btn(remainingFor(requesting, reqDate) === 0 ? t.line : t.coral, remainingFor(requesting, reqDate) === 0 ? t.textSoft : '#fff')}><Gift size={16} /> Chiedi per {giftDayLabel(reqDate)}</button>
             </div>
           </div>
         </div>

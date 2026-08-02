@@ -7,9 +7,21 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '13';
+export const CURRENT_VERSION = '14';
 
 export const CHANGELOG = [
+  {
+    version: '14',
+    date: '2026-08-02',
+    time: '18:00',
+    title: 'Regali "buono mensile"',
+    items: [
+      'Ora un regalo del catalogo può avere un numero massimo di richieste al mese — utile per cose come "3 massaggi al mese": finiti quelli, il pulsante diventa «Esaurito» finché non inizia il mese dopo',
+      'Si imposta col ✏️ sul regalo, o quando se ne aggiunge uno nuovo: basta attivare «Buono mensile» e scegliere quante volte',
+      'Una richiesta rifiutata non consuma il buono: si può richiedere di nuovo',
+      'I regali senza buono restano come prima: si possono chiedere quante volte si vuole',
+    ],
+  },
   {
     version: '13',
     date: '2026-08-02',
