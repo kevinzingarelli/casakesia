@@ -13,6 +13,7 @@ import {
   pointsForEntry, choreNameForEntry, achievementContext, uid, startOfWeek,
   houseHealth, motivationalMessage, currentSeason,
   houseState, recurringStatus, rewardAchieved, recentChores, groupByDay, computeWeekWins,
+  mergeData, sameData, cloneData,
 } from './helpers';
 import { playCompletionSound, playAchievementSound, playLevelUpSound, vibrate } from './sounds';
 import { quoteOfTheDay } from './quotes';
@@ -22,13 +23,18 @@ import ShareCard from './ShareCard';
 import HouseSvg from './HouseSvg';
 import StreakView from './StreakView';
 
-const DEFAULT_DATA = { users: DEFAULT_USERS, chores: DEFAULT_CHORES, log: [], version: 6, coupleGoal: null, vacations: {}, penaltiesOn: false, customCategories: [], categories: [...CATEGORIES], rewards: [], savedQuotes: [], excused: {} };
+const DEFAULT_DATA = { users: DEFAULT_USERS, chores: DEFAULT_CHORES, log: [], version: 7, coupleGoal: null, vacations: {}, penaltiesOn: false, customCategories: [], categories: [...CATEGORIES], rewards: [], savedQuotes: [], excused: {} };
 
 const LS_IDENTITY = 'casa-points-identity';
 const LS_SOUND = 'casa-points-sound';
 const LS_DARK = 'casa-points-dark';
 const LS_SEASONAL = 'casa-points-seasonal';
 const LS_STYLE = 'casa-points-style';
+const LS_PENDING = 'casa-points-pending';   // modifiche non ancora arrivate sul server
+
+const SAVE_DEBOUNCE = 250;   // ms di attesa prima di scrivere su Supabase
+const RETRY_MIN = 1000;      // primo tentativo dopo un errore di rete
+const RETRY_MAX = 20000;     // attesa massima fra un tentativo e l'altro
 
 function loadLS(key, fallback) {
   try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; }
@@ -43,7 +49,7 @@ export default function App() {
   const [pickerCount, setPickerCount] = useState(1);
   const [pickerDate, setPickerDate] = useState(todayStr());      // retrodatazione
   const [pickerDedicate, setPickerDedicate] = useState(false);   // dedica
-  const [pickerExtras, setPickerExtras] = useState([]);          // extra opzionali selezionati
+  const [pickerSelections, setPickerSelections] = useState(['parent']); // 'parent' | subtask id
   const [confetti, setConfetti] = useState(null);
   const [dedicationToast, setDedicationToast] = useState(null);
   const [historyFilter, setHistoryFilter] = useState('all');
@@ -67,6 +73,12 @@ export default function App() {
   const [removingIds, setRemovingIds] = useState([]);
   const dataRef = useRef(null);
   const saveTimer = useRef(null);
+  const baseRef = useRef(null);       // ultimo stato confermato dal server
+  const rev = useRef(0);              // cresce ad ogni modifica locale
+  const savedRev = useRef(0);         // revisione già confermata dal server
+  const flushing = useRef(false);
+  const retryDelay = useRef(0);
+  const loaded = useRef(false);       // true solo dopo una lettura riuscita dal server
 
   const season = currentSeason();
   const baseTheme = theme(dark, style);
@@ -95,14 +107,10 @@ export default function App() {
     return [...CATEGORIES, ...(data?.customCategories || [])];
   }, [data]);
 
-  useEffect(() => {
-    let channel;
-    const load = async () => {
-      try {
-        const { data: row, error: err } = await supabase.from(TABLE).select('value').eq('id', DATA_ROW_ID).single();
-        if (err) throw err;
-        let value = row?.value;
-        if (!value || Object.keys(value).length === 0) value = DEFAULT_DATA;
+  // Applica le migrazioni di schema su una copia, senza toccare l'originale
+  const migrate = (input) => {
+    const value = cloneData(input);
+    {
         // migrazioni
         if (!value.version || value.version < 2) {
           value.log = (value.log || []).map((e) => ({ ...e, snapshotPoints: e.points, snapshotName: e.choreName, snapshotEmoji: e.emoji, snapshotCategory: e.category }));
@@ -131,36 +139,155 @@ export default function App() {
           value.categories = Array.from(new Set([...base, ...custom]));
           value.version = 6;
         }
+        if (value.version < 7) {
+          // Converto extras (v6) in subtasks indipendenti
+          value.chores = (value.chores || []).map((ch) => {
+            if (ch.extras && ch.extras.length) {
+              const subtasks = ch.extras.map((ex) => ({
+                id: ex.id, name: ex.name, emoji: ch.emoji, points: ex.points,
+              }));
+              const { extras, ...rest } = ch;
+              return { ...rest, subtasks };
+            }
+            return { ...ch, subtasks: ch.subtasks || [] };
+          });
+          value.version = 7;
+        }
+    }
+    return value;
+  };
+
+  // Copia di sicurezza locale delle modifiche non ancora arrivate sul server
+  const writePending = () => saveLS(LS_PENDING, { base: baseRef.current, local: dataRef.current });
+  const clearPending = () => { try { localStorage.removeItem(LS_PENDING); } catch {} };
+
+  // Invia su Supabase l'ultimo stato conosciuto; se fallisce riprova da sola.
+  const flush = async () => {
+    if (flushing.current) return;                       // già in corso: si riprogramma da sé
+    if (savedRev.current === rev.current) return;       // niente da salvare
+    const sendingRev = rev.current;
+    const payload = dataRef.current;
+    flushing.current = true;
+    let ok = false;
+    try {
+      const { error: err } = await supabase.from(TABLE)
+        .update({ value: payload, updated_at: new Date().toISOString() })
+        .eq('id', DATA_ROW_ID);
+      if (err) throw err;
+      ok = true;
+    } catch (e) {
+      console.error('Errore salvataggio', e);
+    }
+    flushing.current = false;
+
+    if (ok) {
+      savedRev.current = Math.max(savedRev.current, sendingRev);
+      baseRef.current = payload;
+      retryDelay.current = 0;
+      setError(null);
+      if (rev.current === sendingRev) clearPending();
+      else scheduleFlush(SAVE_DEBOUNCE);               // altre modifiche nel frattempo
+    } else {
+      retryDelay.current = retryDelay.current ? Math.min(retryDelay.current * 2, RETRY_MAX) : RETRY_MIN;
+      setError('Modifiche non ancora salvate. Riprovo da solo…');
+      scheduleFlush(retryDelay.current);
+    }
+  };
+
+  const scheduleFlush = (delay) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => { saveTimer.current = null; flush(); }, delay);
+  };
+
+  const save = (next) => {
+    // Senza una lettura riuscita non sappiamo cosa c'è sul server: scrivere ora
+    // significherebbe sovrascrivere i dati veri con quelli di default.
+    if (!loaded.current) {
+      setError('Non sei collegato al database condiviso: la modifica non è stata salvata. Ricarica l\'app.');
+      return;
+    }
+    dataRef.current = next;
+    setData(next);
+    rev.current += 1;
+    writePending();
+    scheduleFlush(SAVE_DEBOUNCE);
+  };
+
+  useEffect(() => {
+    let channel;
+    const load = async () => {
+      try {
+        const { data: row, error: err } = await supabase.from(TABLE).select('value').eq('id', DATA_ROW_ID).single();
+        if (err) throw err;
+        const raw = (!row?.value || Object.keys(row.value).length === 0) ? DEFAULT_DATA : row.value;
+        const server = cloneData(raw);
+        let value = migrate(raw);
+        // Le migrazioni vanno riscritte sul server, non solo tenute in memoria
+        let dirty = !sameData(server, value);
+
+        // Modifiche rimaste in sospeso da una sessione precedente (app chiusa o rete assente)
+        const pending = loadLS(LS_PENDING, null);
+        if (pending && pending.base && pending.local) {
+          const merged = mergeData(pending.base, pending.local, value);
+          if (!sameData(merged, value)) { value = merged; dirty = true; }
+        }
+
+        baseRef.current = server;
         dataRef.current = value;
+        loaded.current = true;
         setData(value);
+        if (dirty) { rev.current += 1; writePending(); scheduleFlush(SAVE_DEBOUNCE); }
+        else clearPending();
       } catch (e) {
         console.error(e);
         setError('Impossibile collegarsi al database condiviso.');
-        dataRef.current = DEFAULT_DATA;
-        setData(DEFAULT_DATA);
+        dataRef.current = cloneData(DEFAULT_DATA);
+        setData(dataRef.current);
       } finally { setLoading(false); }
     };
     load();
 
     channel = supabase.channel('household_data_changes')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: TABLE, filter: `id=eq.${DATA_ROW_ID}` }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: TABLE, filter: `id=eq.${DATA_ROW_ID}` }, (payload) => {
         const incoming = payload.new?.value;
-        if (incoming) { dataRef.current = incoming; setData(incoming); }
+        if (!incoming || !dataRef.current) return;
+        if (sameData(incoming, dataRef.current)) {      // è l'eco del nostro stesso salvataggio
+          baseRef.current = incoming;
+          return;
+        }
+        if (rev.current === savedRev.current) {         // nessuna modifica locale in attesa
+          baseRef.current = incoming;
+          dataRef.current = incoming;
+          setData(incoming);
+          return;
+        }
+        // Ci sono modifiche locali non ancora salvate: si fondono invece di perderle
+        const merged = mergeData(baseRef.current, dataRef.current, incoming);
+        baseRef.current = incoming;
+        dataRef.current = merged;
+        setData(merged);
+        rev.current += 1;
+        writePending();
+        scheduleFlush(SAVE_DEBOUNCE);
       }).subscribe();
-    return () => { if (channel) supabase.removeChannel(channel); };
-  }, []);
 
-  const save = (next) => {
-    dataRef.current = next;
-    setData(next);
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      try {
-        const { error: err } = await supabase.from(TABLE).update({ value: next, updated_at: new Date().toISOString() }).eq('id', DATA_ROW_ID);
-        if (err) throw err;
-      } catch (e) { console.error('Errore salvataggio', e); setError('Errore di salvataggio.'); }
-    }, 250);
-  };
+    // Se l'app viene chiusa o mandata in background, si salva subito senza aspettare il debounce
+    const flushNow = () => {
+      if (rev.current === savedRev.current) return;
+      if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+      flush();
+    };
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flushNow(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flushNow);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flushNow);
+      if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, []);
 
   const totals = useMemo(() => {
     if (!data) return {};
@@ -177,6 +304,15 @@ export default function App() {
     return s;
   }, [data]);
 
+  const weekPoints = useMemo(() => {
+    const wk = {};
+    if (!data) return wk;
+    const ws = startOfWeek();
+    data.users.forEach((u) => { wk[u.id] = 0; });
+    data.log.forEach((e) => { if (new Date(e.timestamp) >= ws) wk[e.userId] = (wk[e.userId] || 0) + pointsForEntry(e, choresById); });
+    return wk;
+  }, [data, choresById]);
+
   const me = useMemo(() => {
     if (!data || !identity) return null;
     return data.users.find((u) => u.id === identity) || null;
@@ -184,32 +320,47 @@ export default function App() {
 
   const otherUser = me && data ? data.users.find((u) => u.id !== me.id) : null;
 
-  // Registrazione con retrodatazione + dedica + conteggio multiplo
-  const logChore = (chore, user, count = 1, dateStr = todayStr(), dedicate = false, extras = []) => {
+  // Registra una o più selezioni (task genitore + sotto-task indipendenti)
+  // selections: array di 'parent' | subtask.id
+  const logSelection = (chore, selections, user, count = 1, dateStr = todayStr(), dedicate = false) => {
+    if (!selections || selections.length === 0) return;
     const isToday = dateStr === todayStr();
     const baseTime = isToday ? new Date() : new Date(`${dateStr}T12:00:00`);
-    // Extra selezionati: salvo gli id + uno snapshot (per il ricalcolo storico anche se poi cambiano)
-    const choreExtras = chore.extras || [];
-    const selectedExtras = extras.filter((id) => choreExtras.some((e) => e.id === id));
-    const extrasSnapshot = choreExtras.filter((e) => selectedExtras.includes(e.id)).map((e) => ({ id: e.id, name: e.name, points: e.points }));
-    const extrasPoints = extrasSnapshot.reduce((s, e) => s + e.points, 0);
+    const hasSubtasks = (chore.subtasks || []).length > 0;
     const entries = [];
-    for (let i = 0; i < count; i++) {
-      const ts = new Date(baseTime.getTime() + i * 1000);
-      entries.push({
-        id: uid(), userId: user.id, choreId: chore.id,
-        snapshotPoints: chore.points, snapshotName: chore.name, snapshotEmoji: chore.emoji, snapshotCategory: chore.category,
-        selectedExtras, extrasSnapshot,
-        timestamp: ts.toISOString(), date: dateStr,
-        dedicatedTo: dedicate && otherUser ? otherUser.id : null,
-      });
-    }
+    let idx = 0;
+
+    selections.forEach((sel) => {
+      const isParent = sel === 'parent';
+      const sub = isParent ? null : (chore.subtasks || []).find((s) => s.id === sel);
+      if (!isParent && !sub) return;
+
+      const pts = isParent ? chore.points : sub.points;
+      const name = isParent ? chore.name : sub.name;
+      const emoji = isParent ? chore.emoji : (sub.emoji || chore.emoji);
+      // count si applica solo al task genitore; i sotto-task sono sempre 1x per sessione
+      const qty = (isParent && !hasSubtasks) ? count : 1;
+
+      for (let i = 0; i < qty; i++) {
+        const ts = new Date(baseTime.getTime() + idx * 1000);
+        entries.push({
+          id: uid(), userId: user.id, choreId: chore.id,
+          subtaskId: isParent ? null : sel,
+          snapshotPoints: pts, snapshotName: name, snapshotEmoji: emoji, snapshotCategory: chore.category,
+          timestamp: ts.toISOString(), date: dateStr,
+          dedicatedTo: dedicate && otherUser ? otherUser.id : null,
+        });
+        idx++;
+      }
+    });
+
+    if (entries.length === 0) return;
     const next = { ...dataRef.current, log: [...entries, ...dataRef.current.log] };
 
     const otherId = dataRef.current.users.find((x) => x.id !== user.id)?.id;
-    const prevCtx = achievementContext(dataRef.current.log, choresById, user.id, otherId);
+    const prevCtx = achievementContext(dataRef.current.log, choresById, user.id, otherId, dataRef.current.excused || {});
     const prevLevel = getLevel(totals[user.id] || 0);
-    const newCtx = achievementContext(next.log, choresById, user.id, otherId);
+    const newCtx = achievementContext(next.log, choresById, user.id, otherId, dataRef.current.excused || {});
     const newTotal = next.log.filter((e) => e.userId === user.id).reduce((s, e) => s + pointsForEntry(e, choresById), 0);
     const newLevel = getLevel(newTotal);
     const prevUnlocked = ACHIEVEMENTS.filter((a) => a.check(prevCtx)).map((a) => a.id);
@@ -217,15 +368,16 @@ export default function App() {
     const leveledUp = newLevel.title !== prevLevel.title;
 
     save(next);
-    setPickerChore(null); setPickerCount(1); setPickerDate(todayStr()); setPickerDedicate(false); setPickerExtras([]);
+    setPickerChore(null); setPickerSelections(['parent']); setPickerCount(1); setPickerDate(todayStr()); setPickerDedicate(false);
 
-    const pts = (chore.points + extrasPoints) * count;
-    vibrate(count > 1 ? [15, 40, 15] : 15);
+    const totalPts = entries.reduce((s, e) => s + e.snapshotPoints, 0);
+    const vibPat = entries.length > 1 ? [10, 30, 10, 30, 10] : 15;
+    vibrate(vibPat);
     if (leveledUp) playLevelUpSound(soundOn);
     else if (justUnlocked) playAchievementSound(soundOn);
     else playCompletionSound(chore.points, soundOn);
 
-    setConfetti({ user, chore, count, points: pts, achievement: justUnlocked, levelUp: leveledUp ? newLevel : null, dedicated: dedicate && otherUser ? otherUser : null, retro: !isToday ? dateStr : null });
+    setConfetti({ user, chore, count: entries.length, points: totalPts, achievement: justUnlocked, levelUp: leveledUp ? newLevel : null, dedicated: dedicate && otherUser ? otherUser : null, retro: !isToday ? dateStr : null });
     setTimeout(() => setConfetti(null), (justUnlocked || leveledUp) ? 2800 : 2000);
   };
 
@@ -241,7 +393,7 @@ export default function App() {
 
   const addChore = () => {
     if (!newChore.name.trim()) return;
-    const chore = { id: `custom-${uid()}`, ...newChore, points: Number(newChore.points) || 1 };
+    const chore = { id: `custom-${uid()}`, ...newChore, points: Math.max(1, Number(newChore.points) || 1) };
     save({ ...dataRef.current, chores: [...dataRef.current.chores, chore] });
     setNewChore({ name: '', points: 10, emoji: '✨', category: 'Pulizia' });
     setShowAddChore(false);
@@ -330,7 +482,10 @@ export default function App() {
   };
 
   const handleChoreClick = (chore) => {
-    setPickerCount(1); setPickerDate(todayStr()); setPickerDedicate(false); setPickerExtras([]);
+    setPickerCount(1); setPickerDate(todayStr()); setPickerDedicate(false);
+    // Se il task ha sotto-task, default: solo il genitore selezionato
+    // Se non ha sotto-task, selezione implicita del genitore
+    setPickerSelections(['parent']);
     setPickerChore(chore);
   };
 
@@ -361,12 +516,8 @@ export default function App() {
   // Contesto ricompense
   const weeklyWinnerId = (() => {
     if (!otherUser || !me) return null;
-    const ws = startOfWeek();
-    const wk = {};
-    data.users.forEach((u) => { wk[u.id] = 0; });
-    data.log.forEach((e) => { if (new Date(e.timestamp) >= ws) wk[e.userId] = (wk[e.userId] || 0) + pointsForEntry(e, choresById); });
-    const sorted = [...data.users].sort((a, b) => (wk[b.id] || 0) - (wk[a.id] || 0));
-    return (wk[sorted[0].id] || 0) > (wk[sorted[1]?.id] || 0) ? sorted[0].id : null;
+    const sorted = [...data.users].sort((a, b) => (weekPoints[b.id] || 0) - (weekPoints[a.id] || 0));
+    return (weekPoints[sorted[0].id] || 0) > (weekPoints[sorted[1]?.id] || 0) ? sorted[0].id : null;
   })();
   const rewardCtx = me ? {
     myId: me.id,
@@ -374,7 +525,7 @@ export default function App() {
     otherTotal: otherUser ? totals[otherUser.id] || 0 : 0,
     coupleTotal: Object.values(totals).reduce((a, b) => a + b, 0),
     weeklyWinnerId,
-    myWeekPoints: 1,
+    myWeekPoints: weekPoints[me.id] || 0,
   } : null;
   const rewards = data.rewards || [];
   const unclaimedAchievedRewards = rewardCtx ? rewards.filter((r) => !r.claimed && rewardAchieved(r, rewardCtx)) : [];
@@ -401,6 +552,13 @@ export default function App() {
         @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(255,209,102,0.6); } 100% { box-shadow: 0 0 0 18px rgba(255,209,102,0); } }
         @keyframes shimmer { 0%,100% { opacity: 1; } 50% { opacity: 0.65; } }
         @keyframes wiggle { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
+        @keyframes hero-pop { 0% { transform: scale(0.4) translateY(24px); opacity: 0; } 65% { transform: scale(1.06) translateY(-4px); opacity: 1; } 100% { transform: scale(1) translateY(0); opacity: 1; } }
+        @keyframes sheet-rise { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes backdrop-blur-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes subtask-check { 0% { transform: scale(0.7); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+        .hero-emoji { animation: hero-pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+        .picker-sheet { animation: sheet-rise 0.36s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+        .picker-backdrop { animation: backdrop-blur-in 0.25s ease forwards; }
         @keyframes heart-float { 0% { transform: translateY(0) scale(0.8); opacity: 1; } 100% { transform: translateY(-60px) scale(1.4); opacity: 0; } }
         @keyframes glow { 0%,100% { box-shadow: 0 4px 12px rgba(45,42,74,0.05); } 50% { box-shadow: 0 4px 24px rgba(255,209,102,0.4); } }
         .confetti-piece { position: absolute; font-size: 28px; animation: float-up 1.7s ease-out forwards; }
@@ -461,97 +619,139 @@ export default function App() {
       )}
 
       {/* Picker */}
-      {pickerChore && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,74,0.4)', zIndex: 40, display: 'flex', alignItems: 'flex-end' }} onClick={() => setPickerChore(null)}>
-          <div className="pop-card" style={{ background: t.card, width: '100%', borderRadius: '28px 28px 0 0', padding: '24px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))', boxShadow: '0 -8px 30px rgba(45,42,74,0.2)', maxHeight: '88vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-              <div style={{ fontSize: '36px' }}>{pickerChore.emoji}</div>
-              <div className="display" style={{ fontSize: '18px', fontWeight: 600, color: t.text }}>{pickerChore.name}</div>
-              {(() => {
-                const exPts = (pickerChore.extras || []).filter((e) => pickerExtras.includes(e.id)).reduce((s, e) => s + e.points, 0);
-                const unit = pickerChore.points + exPts;
-                return <div style={{ fontSize: '14px', color: t.textSoft }}>+{unit * pickerCount} punti{pickerCount > 1 ? ` (${unit} × ${pickerCount})` : ''}{exPts > 0 ? ` · include +${exPts} extra` : ''}</div>;
-              })()}
-            </div>
+      {pickerChore && (() => {
+        const subtasks = pickerChore.subtasks || [];
+        const hasSubtasks = subtasks.length > 0;
+        const totalPts = (() => {
+          let pts = 0;
+          pickerSelections.forEach(sel => {
+            if (sel === 'parent') pts += pickerChore.points * (hasSubtasks ? 1 : pickerCount);
+            else {
+              const sub = subtasks.find(s => s.id === sel);
+              if (sub) pts += sub.points;
+            }
+          });
+          return pts;
+        })();
+        const allIds = ['parent', ...subtasks.map(s => s.id)];
+        const allSelected = allIds.every(id => pickerSelections.includes(id));
+        return (
+          <div className="picker-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(10,8,30,0.6)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', zIndex: 40, display: 'flex', alignItems: 'flex-end' }} onClick={() => setPickerChore(null)}>
+            <div className="picker-sheet" style={{ background: t.card, width: '100%', borderRadius: '32px 32px 0 0', padding: '0 0 calc(20px + env(safe-area-inset-bottom)) 0', boxShadow: '0 -12px 40px rgba(0,0,0,0.3)', maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
 
-            {/* Quantità */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', marginBottom: '6px' }}>
-              <button onClick={() => setPickerCount((c) => Math.max(1, c - 1))} style={{ width: '52px', height: '52px', borderRadius: '50%', border: `2px solid ${t.line}`, background: t.card, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Minus size={24} /></button>
-              <div className="display" style={{ fontSize: '32px', fontWeight: 800, minWidth: '50px', textAlign: 'center', color: t.text }}>{pickerCount}</div>
-              <button onClick={() => setPickerCount((c) => Math.min(20, c + 1))} style={{ width: '52px', height: '52px', borderRadius: '50%', border: `2px solid ${t.line}`, background: t.card, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={24} /></button>
-            </div>
-            <div style={{ fontSize: '11px', color: t.textSoft, textAlign: 'center', marginBottom: '14px' }}>Quante volte?</div>
-
-            {/* Extra opzionali */}
-            {(pickerChore.extras || []).length > 0 && (
-              <div style={{ background: dark ? 'rgba(255,255,255,0.05)' : '#F5F0FF', borderRadius: '14px', padding: '12px', marginBottom: '12px' }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: t.text, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}><Plus size={15} color={t.lavender} /> Hai fatto anche...? (facoltativo)</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {(pickerChore.extras || []).map((ex) => {
-                    const on = pickerExtras.includes(ex.id);
-                    return (
-                      <button key={ex.id} onClick={() => setPickerExtras((arr) => on ? arr.filter((x) => x !== ex.id) : [...arr, ex.id])} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px', borderRadius: '12px', border: `2px solid ${on ? t.lavender : t.line}`, background: on ? (dark ? 'rgba(167,139,250,0.15)' : '#EDE7FF') : t.card, cursor: 'pointer', textAlign: 'left', minHeight: '44px' }}>
-                        <div style={{ width: '22px', height: '22px', borderRadius: '7px', border: `2px solid ${on ? t.lavender : t.line}`, background: on ? t.lavender : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{on && <Check size={14} color="#fff" />}</div>
-                        <span style={{ flex: 1, fontSize: '14px', fontWeight: 700, color: t.text }}>{ex.name}</span>
-                        <span style={{ fontSize: '14px', fontWeight: 800, color: t.lavender }}>+{ex.points}</span>
-                      </button>
-                    );
-                  })}
+              {/* Hero section */}
+              <div style={{ background: `linear-gradient(160deg, ${t.coral}22, ${t.lavender}22)`, borderRadius: '32px 32px 0 0', padding: '28px 24px 20px', textAlign: 'center', position: 'relative' }}>
+                <button onClick={() => setPickerChore(null)} style={{ position: 'absolute', top: '16px', right: '16px', background: t.line, border: 'none', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: t.textSoft }}><X size={16} /></button>
+                <div className="hero-emoji" style={{ fontSize: '72px', lineHeight: 1, display: 'block', marginBottom: '10px', filter: `drop-shadow(0 4px 16px ${t.coral}66)` }}>{pickerChore.emoji}</div>
+                <div className="display" style={{ fontSize: '24px', fontWeight: 700, color: t.text, marginBottom: '4px' }}>{pickerChore.name}</div>
+                <div style={{ fontSize: '15px', color: t.textSoft }}>
+                  {pickerSelections.length === 0 ? 'Nessuna selezione' : <span style={{ color: t.coral, fontWeight: 800 }}>+{totalPts} punti</span>}
+                  {!hasSubtasks && pickerCount > 1 && <span style={{ color: t.textSoft }}> ({pickerChore.points} × {pickerCount})</span>}
                 </div>
               </div>
-            )}
-            {/* Retrodatazione */}
-            <div style={{ background: dark ? 'rgba(255,255,255,0.05)' : '#FFF7ED', borderRadius: '14px', padding: '12px', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontSize: '13px', fontWeight: 700, color: t.text }}>
-                <Calendar size={16} /> Quando l'hai fatto?
-              </div>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {[0, 1, 2, 3].map((daysAgo) => {
-                  const d = new Date(); d.setDate(d.getDate() - daysAgo);
-                  const ds = todayStr(d);
-                  const label = daysAgo === 0 ? 'Oggi' : daysAgo === 1 ? 'Ieri' : d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' });
-                  return (
-                    <button key={daysAgo} onClick={() => setPickerDate(ds)} style={{ padding: '8px 12px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 700, background: pickerDate === ds ? t.coral : t.card, color: pickerDate === ds ? '#fff' : t.textSoft }}>{label}</button>
-                  );
-                })}
-                <input type="date" value={pickerDate} max={todayStr()} onChange={(e) => setPickerDate(e.target.value)} style={{ padding: '6px 8px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '12px' }} />
-              </div>
-            </div>
 
-            {/* Dedica */}
-            {otherUser && (
-              <button onClick={() => setPickerDedicate((d) => !d)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px', borderRadius: '12px', border: `2px solid ${pickerDedicate ? t.coral : t.line}`, background: pickerDedicate ? (dark ? 'rgba(255,107,107,0.15)' : '#FFF0EE') : t.card, color: pickerDedicate ? t.coral : t.textSoft, fontWeight: 700, fontSize: '13px', cursor: 'pointer', marginBottom: '14px' }}>
-                <Heart size={16} fill={pickerDedicate ? t.coral : 'none'} /> {pickerDedicate ? `Dedicato a ${otherUser.name} ❤️` : `Dedica a ${otherUser.name}`}
-              </button>
-            )}
+              <div style={{ padding: '20px 24px 0' }}>
 
-            {/* Chi */}
-            {me ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <button onClick={() => logChore(pickerChore, me, pickerCount, pickerDate, pickerDedicate, pickerExtras)} style={{ background: me.color, border: 'none', borderRadius: '18px', padding: '16px', color: '#fff', fontFamily: "'Fredoka', sans-serif", fontWeight: 600, fontSize: '17px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '24px' }}>{me.emoji}</span> L'ho fatto io
-                </button>
+                {/* Sotto-task selezionabili */}
+                {hasSubtasks && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 800, color: t.textSoft }}>Cosa hai fatto?</div>
+                      <button onClick={() => setPickerSelections(allSelected ? [] : allIds)} style={{ background: 'transparent', border: 'none', fontSize: '12px', fontWeight: 800, color: t.lavender, cursor: 'pointer' }}>{allSelected ? 'Deseleziona tutto' : 'Tutto fatto'}</button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {/* Genitore */}
+                      {(() => {
+                        const on = pickerSelections.includes('parent');
+                        return (
+                          <button onClick={() => setPickerSelections(prev => on ? prev.filter(x => x !== 'parent') : [...prev, 'parent'])} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderRadius: t.radiusSm, border: `2px solid ${on ? t.coral : t.line}`, background: on ? (dark ? 'rgba(255,107,107,0.12)' : '#FFF0EE') : 'transparent', cursor: 'pointer', textAlign: 'left', minHeight: '52px', transition: 'all 0.15s' }}>
+                            <div style={{ width: '26px', height: '26px', borderRadius: '8px', border: `2px solid ${on ? t.coral : t.line}`, background: on ? t.coral : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>{on && <Check size={16} color="#fff" />}</div>
+                            <span style={{ fontSize: '22px' }}>{pickerChore.emoji}</span>
+                            <span style={{ flex: 1, fontSize: '15px', fontWeight: 800, color: t.text }}>{pickerChore.name}</span>
+                            <span style={{ fontSize: '15px', fontWeight: 800, color: t.coral }}>+{pickerChore.points}</span>
+                          </button>
+                        );
+                      })()}
+                      {/* Sotto-task */}
+                      {subtasks.map((sub) => {
+                        const on = pickerSelections.includes(sub.id);
+                        return (
+                          <button key={sub.id} onClick={() => { vibrate(8); setPickerSelections(prev => on ? prev.filter(x => x !== sub.id) : [...prev, sub.id]); }} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderRadius: t.radiusSm, border: `2px solid ${on ? t.lavender : t.line}`, background: on ? (dark ? 'rgba(167,139,250,0.12)' : '#F0ECFF') : 'transparent', cursor: 'pointer', textAlign: 'left', minHeight: '52px', transition: 'all 0.15s' }}>
+                            <div style={{ width: '26px', height: '26px', borderRadius: '8px', border: `2px solid ${on ? t.lavender : t.line}`, background: on ? t.lavender : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>{on && <Check size={16} color="#fff" />}</div>
+                            <span style={{ fontSize: '22px' }}>{sub.emoji || pickerChore.emoji}</span>
+                            <span style={{ flex: 1, fontSize: '15px', fontWeight: 700, color: t.text }}>{sub.name}</span>
+                            <span style={{ fontSize: '15px', fontWeight: 800, color: t.lavender }}>+{sub.points}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quantità (solo se non ci sono sotto-task) */}
+                {!hasSubtasks && (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', marginBottom: '6px' }}>
+                      <button onClick={() => setPickerCount((c) => Math.max(1, c - 1))} style={{ width: '52px', height: '52px', borderRadius: '50%', border: `2px solid ${t.line}`, background: t.card, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Minus size={24} /></button>
+                      <div className="display" style={{ fontSize: '36px', fontWeight: 800, minWidth: '50px', textAlign: 'center', color: t.text }}>{pickerCount}</div>
+                      <button onClick={() => setPickerCount((c) => Math.min(20, c + 1))} style={{ width: '52px', height: '52px', borderRadius: '50%', border: `2px solid ${t.line}`, background: t.card, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={24} /></button>
+                    </div>
+                    <div style={{ fontSize: '12px', color: t.textSoft, textAlign: 'center', marginBottom: '16px' }}>Quante volte?</div>
+                  </>
+                )}
+
+                {/* Retrodatazione */}
+                <div style={{ background: dark ? 'rgba(255,255,255,0.05)' : '#FFF7ED', borderRadius: t.radiusSm, padding: '12px', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontSize: '13px', fontWeight: 700, color: t.text }}><Calendar size={16} /> Quando l'hai fatto?</div>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {[0, 1, 2, 3].map((daysAgo) => {
+                      const d = new Date(); d.setDate(d.getDate() - daysAgo);
+                      const ds = todayStr(d);
+                      const label = daysAgo === 0 ? 'Oggi' : daysAgo === 1 ? 'Ieri' : d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' });
+                      return (
+                        <button key={daysAgo} onClick={() => setPickerDate(ds)} style={{ padding: '8px 12px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 700, background: pickerDate === ds ? t.coral : t.card, color: pickerDate === ds ? '#fff' : t.textSoft }}>{label}</button>
+                      );
+                    })}
+                    <input type="date" value={pickerDate} max={todayStr()} onChange={(e) => setPickerDate(e.target.value)} style={{ padding: '6px 8px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '12px' }} />
+                  </div>
+                </div>
+
+                {/* Dedica */}
                 {otherUser && (
-                  <button onClick={() => logChore(pickerChore, otherUser, pickerCount, pickerDate, false, pickerExtras)} style={{ background: 'transparent', border: `2px solid ${otherUser.color}`, borderRadius: '18px', padding: '12px', color: otherUser.color, fontFamily: "'Fredoka', sans-serif", fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '20px' }}>{otherUser.emoji}</span> L'ha fatto {otherUser.name}
+                  <button onClick={() => setPickerDedicate((d) => !d)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: t.radiusSm, border: `2px solid ${pickerDedicate ? t.coral : t.line}`, background: pickerDedicate ? (dark ? 'rgba(255,107,107,0.15)' : '#FFF0EE') : t.card, color: pickerDedicate ? t.coral : t.textSoft, fontWeight: 700, fontSize: '13px', cursor: 'pointer', marginBottom: '14px' }}>
+                    <Heart size={16} fill={pickerDedicate ? t.coral : 'none'} /> {pickerDedicate ? `Dedicato a ${otherUser.name} ❤️` : `Dedica a ${otherUser.name}`}
                   </button>
                 )}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: '12px' }}>
-                {data.users.map((u) => (
-                  <button key={u.id} onClick={() => logChore(pickerChore, u, pickerCount, pickerDate, false, pickerExtras)} style={{ flex: 1, background: u.color, border: 'none', borderRadius: '18px', padding: '18px 8px', color: '#fff', fontFamily: "'Fredoka', sans-serif", fontWeight: 600, fontSize: '16px', cursor: 'pointer' }}>
-                    <div style={{ fontSize: '28px', marginBottom: '4px' }}>{u.emoji}</div>{u.name}
-                  </button>
-                ))}
-              </div>
-            )}
-            <button onClick={() => setPickerChore(null)} style={{ width: '100%', marginTop: '12px', background: 'transparent', border: 'none', color: t.textSoft, padding: '8px', fontSize: '14px', cursor: 'pointer' }}>Annulla</button>
-          </div>
-        </div>
-      )}
 
-      {/* Header */}
+                {/* Chi ha fatto */}
+                {me ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <button onClick={() => logSelection(pickerChore, pickerSelections, me, pickerCount, pickerDate, pickerDedicate)} disabled={pickerSelections.length === 0} style={{ background: pickerSelections.length === 0 ? t.line : me.color, border: 'none', borderRadius: '20px', padding: '18px', color: '#fff', fontFamily: t.fontDisplay, fontWeight: 700, fontSize: '18px', cursor: pickerSelections.length === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: pickerSelections.length === 0 ? 0.5 : 1 }}>
+                      <span style={{ fontSize: '24px' }}>{me.emoji}</span> L'ho fatto io
+                    </button>
+                    {otherUser && (
+                      <button onClick={() => logSelection(pickerChore, pickerSelections, otherUser, pickerCount, pickerDate, false)} disabled={pickerSelections.length === 0} style={{ background: 'transparent', border: `2px solid ${otherUser.color}`, borderRadius: '20px', padding: '14px', color: otherUser.color, fontFamily: t.fontDisplay, fontWeight: 700, fontSize: '15px', cursor: pickerSelections.length === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: pickerSelections.length === 0 ? 0.5 : 1 }}>
+                        <span style={{ fontSize: '20px' }}>{otherUser.emoji}</span> L'ha fatto {otherUser.name}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    {data.users.map((u) => (
+                      <button key={u.id} onClick={() => logSelection(pickerChore, pickerSelections, u, pickerCount, pickerDate, false)} disabled={pickerSelections.length === 0} style={{ flex: 1, background: pickerSelections.length === 0 ? t.line : u.color, border: 'none', borderRadius: '20px', padding: '18px 8px', color: '#fff', fontFamily: t.fontDisplay, fontWeight: 700, fontSize: '16px', cursor: pickerSelections.length === 0 ? 'default' : 'pointer', opacity: pickerSelections.length === 0 ? 0.5 : 1 }}>
+                        <div style={{ fontSize: '28px', marginBottom: '4px' }}>{u.emoji}</div>{u.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+
+            {/* Header */}
       <div style={{ padding: 'calc(20px + env(safe-area-inset-top)) 18px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
           <h1 className="display" style={{ fontSize: '24px', fontWeight: 700, margin: 0, color: t.text }}>🏠 Casa Points</h1>
@@ -730,7 +930,7 @@ export default function App() {
                 <div key={e.id} className="slide-up" style={{ background: t.card, borderRadius: '16px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: cardShadow, animationDelay: `${i * 0.03}s` }}>
                   <div style={{ fontSize: '22px' }}>{info.emoji}</div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{info.name} {dedUser && <Heart size={11} color={t.coral} fill={t.coral} style={{ display: 'inline', verticalAlign: 'middle' }} />}</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{info.name} {info.parentName && <span style={{ fontSize: '11px', color: t.textSoft, fontWeight: 600 }}>· {info.parentEmoji} {info.parentName}</span>} {dedUser && <Heart size={11} color={t.coral} fill={t.coral} style={{ display: 'inline', verticalAlign: 'middle' }} />}</div>
                     <div style={{ fontSize: '12px', color: t.textSoft }}>{u?.emoji} {u?.name} · {formatTime(e.timestamp)}{dedUser ? ` · per ${dedUser.name}` : ''}</div>
                   </div>
                   <div style={{ fontWeight: 800, color: u?.color }} className="display">+{pointsForEntry(e, choresById)}</div>
@@ -742,7 +942,14 @@ export default function App() {
       )}
 
       {/* ===== WIDGET ===== */}
-      {tab === 'widget' && <WidgetScreen data={data} choresById={choresById} totals={totals} streaks={streaks} me={me} t={t} dark={dark} health={health} />}
+      {tab === 'widget' && (
+        <div>
+          <div style={{ padding: '0 18px', marginBottom: '4px' }}>
+            <button onClick={() => setTab('settings')} style={{ background: 'none', border: 'none', padding: 0, color: t.coral, fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>← Opzioni</button>
+          </div>
+          <WidgetScreen data={data} choresById={choresById} totals={totals} streaks={streaks} me={me} t={t} dark={dark} health={health} />
+        </div>
+      )}
 
       {/* ===== SERIE ===== */}
       {tab === 'streak' && (
@@ -767,7 +974,7 @@ export default function App() {
               <input placeholder="Nome del lavoro" value={newChore.name} onChange={(e) => setNewChore({ ...newChore, name: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, marginBottom: '8px', fontSize: '14px', fontFamily: 'inherit' }} />
               <EmojiPicker options={CHORE_EMOJIS} value={newChore.emoji} onChange={(em) => setNewChore({ ...newChore, emoji: em })} t={t} />
               <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                <input type="number" placeholder="Punti" value={newChore.points} onChange={(e) => setNewChore({ ...newChore, points: e.target.value })} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px' }} />
+                <input type="number" min="1" placeholder="Punti" value={newChore.points} onChange={(e) => setNewChore({ ...newChore, points: e.target.value })} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px' }} />
                 <select value={newChore.category} onChange={(e) => setNewChore({ ...newChore, category: e.target.value })} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px' }}>{allCategories.map((c) => <option key={c}>{c}</option>)}</select>
               </div>
               <button onClick={addChore} style={{ width: '100%', marginTop: '8px', background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Aggiungi lavoro</button>
@@ -881,7 +1088,7 @@ export default function App() {
                           <div key={e.id} className={removingIds.includes(e.id) ? 'slide-out' : 'slide-up'} style={{ background: t.card, borderRadius: t.radiusSm, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: cardShadow, animationDelay: removingIds.includes(e.id) ? '0s' : `${Math.min(idx, 10) * 0.02}s` }}>
                             <div style={{ fontSize: '22px' }}>{info.emoji}</div>
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{info.name} {dedUser && <Heart size={11} color={t.coral} fill={t.coral} style={{ display: 'inline', verticalAlign: 'middle' }} />}</div>
+                              <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{info.name} {info.parentName && <span style={{ fontSize: '11px', color: t.textSoft, fontWeight: 600 }}>· {info.parentEmoji} {info.parentName}</span>} {dedUser && <Heart size={11} color={t.coral} fill={t.coral} style={{ display: 'inline', verticalAlign: 'middle' }} />}</div>
                               <div style={{ fontSize: '12px', color: t.textSoft }}>{u?.emoji} {u?.name} · {formatTime(e.timestamp)}{dedUser ? ` · ❤️ ${dedUser.name}` : ''}</div>
                             </div>
                             <div style={{ fontWeight: 800, color: u?.color }} className="display">+{pointsForEntry(e, choresById)}</div>
@@ -911,6 +1118,7 @@ export default function App() {
           allCategories={allCategories} addCustomCategory={addCustomCategory} renameCategory={renameCategory} removeCategory={removeCategory} choresUsingCategory={choresUsingCategory}
           penaltiesOn={data.penaltiesOn} togglePenalties={togglePenalties} vacations={data.vacations} setVacation={setVacation}
           onOpenRewards={() => setShowRewards(true)} onOpenSavedQuotes={() => setShowSavedQuotes(true)}
+          onOpenWidgetPreview={() => setTab('widget')}
           savedCount={(data.savedQuotes || []).length}
         />
       )}
@@ -951,7 +1159,7 @@ export default function App() {
 // COMPONENTI AUSILIARI
 // ============================================================
 
-function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, style, setStyle, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, renameCategory, removeCategory, choresUsingCategory, penaltiesOn, togglePenalties, vacations, setVacation, onOpenRewards, onOpenSavedQuotes, savedCount }) {
+function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, style, setStyle, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, renameCategory, removeCategory, choresUsingCategory, penaltiesOn, togglePenalties, vacations, setVacation, onOpenRewards, onOpenSavedQuotes, savedCount, onOpenWidgetPreview }) {
   const [newCat, setNewCat] = useState('');
   const customCats = data.customCategories || [];
 
@@ -1053,8 +1261,11 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
       <button onClick={onOpenRewards} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '10px', boxShadow: cardShadow }}>
         <Gift size={18} color={t.lavender} /> Gestisci ricompense <span style={{ marginLeft: 'auto', color: t.textSoft, fontSize: '12px' }}>{(data.rewards || []).length}</span>
       </button>
-      <button onClick={onOpenSavedQuotes} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '20px', boxShadow: cardShadow }}>
+      <button onClick={onOpenSavedQuotes} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '10px', boxShadow: cardShadow }}>
         <Bookmark size={18} color={t.coral} /> Citazioni salvate <span style={{ marginLeft: 'auto', color: t.textSoft, fontSize: '12px' }}>{savedCount}</span>
+      </button>
+      <button onClick={onOpenWidgetPreview} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '20px', boxShadow: cardShadow }}>
+        <LayoutGrid size={18} color={t.lavender} /> Anteprima widget
       </button>
 
       {/* Preferenze */}
@@ -1128,7 +1339,7 @@ function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, t, categori
         <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, marginBottom: '8px', fontSize: '14px', fontFamily: 'inherit', fontWeight: 700 }} />
         <EmojiPicker options={CHORE_EMOJIS} value={draft.emoji} onChange={(em) => setDraft({ ...draft, emoji: em })} t={t} />
         <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-          <input type="number" value={draft.points} onChange={(e) => setDraft({ ...draft, points: Number(e.target.value) || 0 })} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px' }} />
+          <input type="number" min="1" value={draft.points} onChange={(e) => setDraft({ ...draft, points: Math.max(1, Number(e.target.value) || 0) })} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px' }} />
           <select value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px' }}>{(categories || CATEGORIES).map((c) => <option key={c}>{c}</option>)}</select>
         </div>
         {/* Ricorrenza */}
@@ -1139,29 +1350,33 @@ function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, t, categori
           ))}
         </div>
 
-        {/* Extra opzionali (sotto-voci con punti facoltativi) */}
+        {/* Sotto-task indipendenti */}
         <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${t.line}` }}>
-          <div style={{ fontSize: '12px', color: t.textSoft, fontWeight: 700, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><Plus size={14} color={t.lavender} /> Extra opzionali (punti in più facoltativi)</div>
-          {(draft.extras || []).map((ex, i) => (
-            <div key={ex.id} style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px' }}>
-              <input value={ex.name} placeholder="Es. Pulizia filtri" onChange={(e) => {
-                const extras = [...draft.extras]; extras[i] = { ...ex, name: e.target.value }; setDraft({ ...draft, extras });
+          <div style={{ fontSize: '12px', color: t.textSoft, fontWeight: 700, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><Plus size={14} color={t.lavender} /> Sotto-task (selezionabili indipendentemente)</div>
+          <div style={{ fontSize: '11px', color: t.textSoft, marginBottom: '10px' }}>Es. "Pulizia filtri" si può segnare anche senza aver fatto il task principale.</div>
+          {(draft.subtasks || []).map((sub, i) => (
+            <div key={sub.id} style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px' }}>
+              <input value={sub.emoji || ''} onChange={(e) => {
+                const subtasks = [...(draft.subtasks || [])]; subtasks[i] = { ...sub, emoji: e.target.value }; setDraft({ ...draft, subtasks });
+              }} style={{ width: '48px', padding: '9px', borderRadius: '9px', border: `1px solid ${t.line}`, fontSize: '18px', textAlign: 'center' }} placeholder="🔧" />
+              <input value={sub.name} placeholder="Es. Pulizia filtri" onChange={(e) => {
+                const subtasks = [...(draft.subtasks || [])]; subtasks[i] = { ...sub, name: e.target.value }; setDraft({ ...draft, subtasks });
               }} style={{ flex: 1, padding: '9px', borderRadius: '9px', border: `1px solid ${t.line}`, fontSize: '13px' }} />
               <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                 <span style={{ fontSize: '13px', color: t.textSoft, fontWeight: 700 }}>+</span>
-                <input type="number" value={ex.points} onChange={(e) => {
-                  const extras = [...draft.extras]; extras[i] = { ...ex, points: Number(e.target.value) || 0 }; setDraft({ ...draft, extras });
-                }} style={{ width: '56px', padding: '9px', borderRadius: '9px', border: `1px solid ${t.line}`, fontSize: '13px', textAlign: 'center' }} />
+                <input type="number" min="1" value={sub.points} onChange={(e) => {
+                  const subtasks = [...(draft.subtasks || [])]; subtasks[i] = { ...sub, points: Math.max(1, Number(e.target.value) || 0) }; setDraft({ ...draft, subtasks });
+                }} style={{ width: '52px', padding: '9px', borderRadius: '9px', border: `1px solid ${t.line}`, fontSize: '13px', textAlign: 'center' }} />
               </div>
-              <button onClick={() => setDraft({ ...draft, extras: draft.extras.filter((x) => x.id !== ex.id) })} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', display: 'flex', padding: '6px' }}><X size={16} /></button>
+              <button onClick={() => setDraft({ ...draft, subtasks: (draft.subtasks || []).filter((x) => x.id !== sub.id) })} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', display: 'flex', padding: '6px' }}><X size={16} /></button>
             </div>
           ))}
-          <button onClick={() => setDraft({ ...draft, extras: [...(draft.extras || []), { id: 'ex-' + uid(), name: '', points: 2 }] })} style={{ background: 'transparent', border: `1.5px dashed ${t.line}`, color: t.textSoft, borderRadius: '9px', padding: '8px 12px', fontWeight: 700, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}><Plus size={14} /> Aggiungi extra</button>
+          <button onClick={() => setDraft({ ...draft, subtasks: [...(draft.subtasks || []), { id: 'sub-' + uid(), name: '', emoji: '', points: 3 }] })} style={{ background: 'transparent', border: `1.5px dashed ${t.line}`, color: t.textSoft, borderRadius: '9px', padding: '8px 12px', fontWeight: 700, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}><Plus size={14} /> Aggiungi sotto-task</button>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
           <button onClick={onDelete} style={{ background: '#FFE5E5', border: 'none', color: '#C0392B', borderRadius: '10px', padding: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700, fontSize: '13px' }}><Trash2 size={15} /> Elimina</button>
-          <button onClick={() => onSave({ ...draft, extras: (draft.extras || []).filter((e) => e.name.trim()) })} style={{ flex: 1, background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Salva</button>
+          <button onClick={() => onSave({ ...draft, subtasks: (draft.subtasks || []).filter((s) => s.name.trim()) })} style={{ flex: 1, background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Salva</button>
           <button onClick={onEdit} style={{ background: t.line, border: 'none', color: t.textSoft, borderRadius: '10px', padding: '10px', cursor: 'pointer' }}><X size={16} /></button>
         </div>
       </div>
@@ -1177,7 +1392,7 @@ function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, t, categori
         </div>
         <div style={{ fontSize: '12px', color: t.textSoft }}>
           {chore.category} · {chore.points} punti
-          {(chore.extras || []).length > 0 && <span style={{ color: t.lavender, fontWeight: 700 }}> · {chore.extras.length} extra</span>}
+          {(chore.subtasks || []).length > 0 && <span style={{ color: t.lavender, fontWeight: 700 }}> · {chore.subtasks.length} sotto-task</span>}
           {rec && rec.status === 'overdue' && <span style={{ color: t.coral, fontWeight: 700 }}> · in ritardo</span>}
           {rec && rec.status === 'due' && <span style={{ color: t.sunny, fontWeight: 700 }}> · da fare</span>}
         </div>

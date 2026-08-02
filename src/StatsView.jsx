@@ -483,7 +483,7 @@ export default function StatsView({ data, choresById, t, dark }) {
       <div className="display" style={titleStyle}>🎖️ Traguardi (tocca per i dettagli)</div>
       {users.map((u) => {
         const otherId = users.find((x) => x.id !== u.id)?.id;
-        const ctx = achievementContext(data.log, choresById, u.id, otherId);
+        const ctx = achievementContext(data.log, choresById, u.id, otherId, data.excused || {});
         const unlockedCount = ACHIEVEMENTS.filter((a) => a.check(ctx)).length;
         return (
           <div key={u.id} style={{ ...cardStyle, marginBottom: '12px' }}>

@@ -258,9 +258,19 @@ export const PERIOD_LABELS = {
 // Per i lavori eliminati usiamo lo snapshot salvato nel log (fallback).
 export function pointsForEntry(entry, choresById) {
   const chore = choresById[entry.choreId];
-  let base = chore ? chore.points : (entry.snapshotPoints || 0);
-  // Extra opzionali selezionati al momento della registrazione
+
+  // Sotto-task indipendente: usa i punti del sotto-task
+  if (entry.subtaskId) {
+    if (chore?.subtasks) {
+      const sub = chore.subtasks.find((s) => s.id === entry.subtaskId);
+      if (sub) return sub.points;
+    }
+    return entry.snapshotPoints || 0;
+  }
+
+  // Legacy: vecchio sistema extras (v6 e precedenti)
   if (entry.selectedExtras && entry.selectedExtras.length) {
+    let base = chore ? chore.points : (entry.snapshotPoints || 0);
     entry.selectedExtras.forEach((exId) => {
       const ex = chore?.extras?.find((e) => e.id === exId);
       if (ex) base += ex.points;
@@ -269,12 +279,37 @@ export function pointsForEntry(entry, choresById) {
         if (snap) base += snap.points;
       }
     });
+    return base;
   }
-  return base;
+
+  // Task normale
+  if (chore) return chore.points;
+  return entry.snapshotPoints || 0;
 }
 
 export function choreNameForEntry(entry, choresById) {
   const chore = choresById[entry.choreId];
+
+  // Sotto-task: mostra nome sotto-task + contesto del genitore
+  if (entry.subtaskId) {
+    if (chore?.subtasks) {
+      const sub = chore.subtasks.find((s) => s.id === entry.subtaskId);
+      if (sub) return {
+        name: sub.name,
+        emoji: sub.emoji || chore.emoji,
+        category: chore.category,
+        parentName: chore.name,
+        parentEmoji: chore.emoji,
+      };
+    }
+    return {
+      name: entry.snapshotName || 'Sotto-task rimosso',
+      emoji: entry.snapshotEmoji || '❓',
+      category: entry.snapshotCategory || 'Gestione',
+      parentName: chore?.name,
+    };
+  }
+
   if (chore) return { name: chore.name, emoji: chore.emoji, category: chore.category };
   return { name: entry.snapshotName || 'Lavoro rimosso', emoji: entry.snapshotEmoji || '❓', category: entry.snapshotCategory || 'Gestione' };
 }
@@ -366,7 +401,7 @@ export function computeWeekWins(log, choresById, userId, otherId) {
 }
 
 // Costruisce il contesto per valutare i traguardi di un utente
-export function achievementContext(log, choresById, userId, otherId) {
+export function achievementContext(log, choresById, userId, otherId, excused = {}) {
   const userLog = log.filter((e) => e.userId === userId);
   const total = userLog.reduce((s, e) => s + pointsForEntry(e, choresById), 0);
   const count = userLog.length;
@@ -376,7 +411,7 @@ export function achievementContext(log, choresById, userId, otherId) {
   const byDay = {};
   userLog.forEach((e) => { byDay[e.date] = (byDay[e.date] || 0) + 1; });
   const maxInDay = Object.values(byDay).reduce((m, v) => Math.max(m, v), 0);
-  const streak = computeStreak(log, userId);
+  const streak = computeStreak(log, userId, excused);
   const weekWins = computeWeekWins(log, choresById, userId, otherId);
   return { total, count, categoriesCovered: categories.size, hasEarly, hasNight, maxInDay, streak, weekWins };
 }
@@ -541,4 +576,110 @@ export function motivationalMessage(log, choresById, userId, otherId, users) {
   // sceglie un messaggio in modo deterministico per la giornata
   const seed = parseInt(todayStr().split('-').join(''), 10) + userId.length;
   return msgs[seed % msgs.length];
+}
+
+/* ------------------------------------------------------------------ *
+ *  Sincronizzazione fra i due dispositivi
+ * ------------------------------------------------------------------ */
+
+// Confronto profondo che ignora l'ordine delle chiavi: Postgres riordina le
+// chiavi dei campi jsonb, quindi JSON.stringify non è affidabile qui.
+export function sameData(a, b) {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return a === b;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false;
+    return a.every((v, i) => sameData(v, b[i]));
+  }
+  const ka = Object.keys(a), kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && sameData(a[k], b[k]));
+}
+
+export function cloneData(v) {
+  if (v == null) return v;
+  if (typeof structuredClone === 'function') return structuredClone(v);
+  return JSON.parse(JSON.stringify(v));
+}
+
+// Liste di oggetti e relativa chiave di identità
+const MERGE_LISTS = { log: 'id', chores: 'id', users: 'id', rewards: 'id', savedQuotes: 'text' };
+// Mappe annidate (per utente, per data…)
+const MERGE_MAPS = ['excused', 'vacations'];
+
+function isPlainObject(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
+
+function indexBy(arr, key) {
+  const m = new Map();
+  (Array.isArray(arr) ? arr : []).forEach((it) => { if (it && it[key] != null) m.set(it[key], it); });
+  return m;
+}
+
+function mergeList(base, local, remote, key) {
+  const b = indexBy(base, key), l = indexBy(local, key), r = indexBy(remote, key);
+  const keep = new Map();
+  new Set([...l.keys(), ...r.keys()]).forEach((k) => {
+    const inBase = b.has(k), inL = l.has(k), inR = r.has(k);
+    if (inBase && (!inL || !inR)) return;              // cancellato da una delle due parti
+    if (inL && inR) {
+      const localChanged = inBase && !sameData(b.get(k), l.get(k));
+      keep.set(k, localChanged ? l.get(k) : r.get(k)); // in conflitto vince chi ha appena agito qui
+    } else {
+      keep.set(k, inL ? l.get(k) : r.get(k));          // aggiunto da una delle due parti
+    }
+  });
+  // Ordine: prima com'è sul server, poi le aggiunte locali non ancora salvate
+  const out = [], seen = new Set();
+  const push = (arr) => (Array.isArray(arr) ? arr : []).forEach((it) => {
+    const k = it && it[key];
+    if (keep.has(k) && !seen.has(k)) { out.push(keep.get(k)); seen.add(k); }
+  });
+  push(remote); push(local);
+  return out;
+}
+
+function mergeMap(base, local, remote) {
+  const b = isPlainObject(base) ? base : {};
+  const l = isPlainObject(local) ? local : {};
+  const r = isPlainObject(remote) ? remote : {};
+  const out = {};
+  new Set([...Object.keys(l), ...Object.keys(r)]).forEach((k) => {
+    const inBase = Object.prototype.hasOwnProperty.call(b, k);
+    const inL = Object.prototype.hasOwnProperty.call(l, k);
+    const inR = Object.prototype.hasOwnProperty.call(r, k);
+    if (inBase && (!inL || !inR)) return;              // cancellato da una delle due parti
+    if (inL && inR) {
+      if (isPlainObject(l[k]) && isPlainObject(r[k])) { out[k] = mergeMap(b[k], l[k], r[k]); return; }
+      out[k] = (inBase && !sameData(b[k], l[k])) ? l[k] : r[k];
+    } else {
+      out[k] = inL ? l[k] : r[k];
+    }
+  });
+  return out;
+}
+
+/**
+ * Fusione a 3 vie dello stato condiviso.
+ *   base   = ultimo stato confermato dal server (antenato comune)
+ *   local  = stato di questo dispositivo, con modifiche non ancora salvate
+ *   remote = stato appena arrivato dal server (modifiche del partner)
+ * Applica le modifiche di entrambi invece di far vincere solo l'ultimo che
+ * scrive. Se lo stesso elemento è stato toccato da tutti e due, vince quello
+ * locale: è l'azione che l'utente ha appena fatto e che vede sullo schermo.
+ */
+export function mergeData(base, local, remote) {
+  if (!base || !local || !remote) return remote || local || base || null;
+  const out = {};
+  new Set([...Object.keys(local), ...Object.keys(remote)]).forEach((f) => {
+    if (MERGE_LISTS[f]) { out[f] = mergeList(base[f], local[f], remote[f], MERGE_LISTS[f]); return; }
+    if (MERGE_MAPS.includes(f)) { out[f] = mergeMap(base[f], local[f], remote[f]); return; }
+    out[f] = sameData(base[f], local[f]) ? remote[f] : local[f];
+  });
+  // Lo storico resta ordinato dal più recente: entrambi i dispositivi vedono lo stesso ordine
+  if (Array.isArray(out.log)) {
+    out.log = [...out.log].sort((a, z) => String(z?.timestamp || '').localeCompare(String(a?.timestamp || '')));
+  }
+  out.version = Math.max(Number(base.version) || 0, Number(local.version) || 0, Number(remote.version) || 0);
+  return out;
 }

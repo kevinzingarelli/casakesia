@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+.vite/
+
+# cartelle di lavoro locali, non fanno parte del sito
+casa-points-COMPLETO-v8/
