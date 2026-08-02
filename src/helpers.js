@@ -125,7 +125,7 @@ export function groupByDay(entries) {
     let label;
     if (date === today) label = 'Oggi';
     else if (date === yest) label = 'Ieri';
-    else label = new Date(date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+    else label = parseLocalDate(date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
     return { date, label, entries: groups[date] };
   });
 }
@@ -198,6 +198,15 @@ export function todayStr(d = new Date()) {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+// `new Date("YYYY-MM-DD")` viene interpretato come mezzanotte UTC: in un fuso
+// indietro rispetto a UTC il giorno "torna indietro" di uno. Le nostre date
+// sono giorni di calendario locali (vedi todayStr sopra), quindi vanno
+// riportate a un'istanza locale con lo stesso anno/mese/giorno.
+export function parseLocalDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 
 export function formatDate(iso) {
@@ -369,14 +378,17 @@ export function computeStreakHistory(log, userId, excused = {}, numDays = 90) {
   return result;
 }
 
-// Serie piu' lunga mai fatta (inclusi giorni giustificati)
+// Serie piu' lunga mai fatta (inclusi giorni giustificati).
+// La giornata odierna ancora aperta ('open') NON conta finché non è
+// confermata: stessa regola di computeStreak, altrimenti questo numero e il
+// "🔥" in cima alla schermata si contraddirebbero a vicenda.
 export function computeBestStreak(log, userId, excused = {}) {
   const history = computeStreakHistory(log, userId, excused, 3650);
   let best = 0, cur = 0;
   history.forEach((d) => {
-    if (d.status === 'done' || d.status === 'excused' || d.status === 'open') {
+    if (d.status === 'done' || d.status === 'excused') {
       cur++; if (cur > best) best = cur;
-    } else { cur = 0; }
+    } else if (d.status !== 'open') { cur = 0; }
   });
   return best;
 }

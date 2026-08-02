@@ -13,7 +13,7 @@ function getCtx() {
     }
   }
   // iOS sospende il contesto finché non c'è interazione: lo riattiviamo.
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   return audioCtx;
 }
 

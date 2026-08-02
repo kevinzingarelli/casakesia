@@ -6,6 +6,7 @@ import { pointsForEntry, startOfWeek, getLevel } from './helpers';
 export default function ShareCard({ data, choresById, totals, streaks, t, season, onClose }) {
   const canvasRef = useRef(null);
   const [dataUrl, setDataUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
 
   const users = data.users;
 
@@ -13,6 +14,16 @@ export default function ShareCard({ data, choresById, totals, streaks, t, season
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    if (!ctx) { setFailed(true); return; }
+    try {
+      drawCard(ctx, canvas);
+    } catch (e) {
+      console.error('Errore nella generazione dell\'immagine', e);
+      setFailed(true);
+    }
+  }, []);
+
+  const drawCard = (ctx, canvas) => {
     const W = 1080, H = 1920;
     canvas.width = W; canvas.height = H;
 
@@ -64,7 +75,7 @@ export default function ShareCard({ data, choresById, totals, streaks, t, season
 
       ctx.fillStyle = '#2D2A4A';
       ctx.font = 'bold 56px sans-serif';
-      ctx.fillText(u.name, cardX + 220, y);
+      ctx.fillText(truncateToWidth(ctx, u.name, 420), cardX + 220, y);
 
       const lvl = getLevel(totals[u.id] || 0);
       ctx.fillStyle = '#6B6789';
@@ -103,7 +114,7 @@ export default function ShareCard({ data, choresById, totals, streaks, t, season
     ctx.fillText('#CasaPoints', W / 2, H - 120);
 
     setDataUrl(canvas.toDataURL('image/png'));
-  }, []);
+  };
 
   const handleDownload = () => {
     if (!dataUrl) return;
@@ -134,11 +145,14 @@ export default function ShareCard({ data, choresById, totals, streaks, t, season
         <button onClick={onClose} style={{ position: 'absolute', top: '12px', right: '12px', background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', zIndex: 2 }}><X size={20} /></button>
         <div className="display" style={{ fontSize: '17px', fontWeight: 700, color: t.text, marginBottom: '12px', textAlign: 'center' }}>Condividi la settimana</div>
         <canvas ref={canvasRef} style={{ display: 'none' }} />
+        {failed && <div style={{ fontSize: '13px', color: t.textSoft, textAlign: 'center', padding: '20px 0' }}>Non riesco a generare l'immagine su questo dispositivo.</div>}
         {dataUrl && <img src={dataUrl} alt="Anteprima" style={{ width: '100%', borderRadius: '16px', marginBottom: '14px' }} />}
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={handleDownload} style={{ flex: 1, background: t.card, border: `1px solid ${t.line}`, color: t.text, borderRadius: '12px', padding: '12px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}><Download size={16} /> Salva</button>
-          <button onClick={handleShare} style={{ flex: 1, background: t.coral, border: 'none', color: '#fff', borderRadius: '12px', padding: '12px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}><Share2 size={16} /> Condividi</button>
-        </div>
+        {!failed && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={handleDownload} disabled={!dataUrl} style={{ flex: 1, background: t.card, border: `1px solid ${t.line}`, color: t.text, borderRadius: '12px', padding: '12px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: dataUrl ? 'pointer' : 'default', opacity: dataUrl ? 1 : 0.5 }}><Download size={16} /> Salva</button>
+            <button onClick={handleShare} disabled={!dataUrl} style={{ flex: 1, background: t.coral, border: 'none', color: '#fff', borderRadius: '12px', padding: '12px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: dataUrl ? 'pointer' : 'default', opacity: dataUrl ? 1 : 0.5 }}><Share2 size={16} /> Condividi</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -152,4 +166,13 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
+}
+
+function truncateToWidth(ctx, text, maxWidth) {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let truncated = text;
+  while (truncated.length > 1 && ctx.measureText(truncated + '…').width > maxWidth) {
+    truncated = truncated.slice(0, -1);
+  }
+  return truncated + '…';
 }

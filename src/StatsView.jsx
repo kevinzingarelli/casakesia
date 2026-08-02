@@ -8,7 +8,7 @@ import {
   ACHIEVEMENTS, CATEGORIES, PERIOD_LABELS, COUPLE_MILESTONES,
   todayStr, periodStart, getLevel, pointsForEntry, choreNameForEntry,
   achievementContext, startOfWeek, coupleContext, computeTrend,
-  hourDistribution, categoryRadar, userTitle,
+  hourDistribution, categoryRadar, userTitle, parseLocalDate,
 } from './helpers';
 
 function PeriodSelector({ period, setPeriod, customDays, setCustomDays, t, options }) {
@@ -108,7 +108,7 @@ export default function StatsView({ data, choresById, t, dark }) {
         }
       });
       buckets = Object.keys(weekMap).sort().map((key) => {
-        const row = { label: new Date(key).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) };
+        const row = { label: parseLocalDate(key).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) };
         users.forEach((u) => { row[u.name] = weekMap[key][u.id] || 0; });
         return row;
       });
@@ -449,7 +449,7 @@ export default function StatsView({ data, choresById, t, dark }) {
             <div style={{ fontWeight: 800, fontSize: '13px', color: t.text }} className="display">{r.user.name}</div>
             <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '4px' }}>Giorno migliore</div>
             <div style={{ fontSize: '20px', fontWeight: 800, color: r.user.color }} className="display">{r.bestPts} pt</div>
-            {r.bestDay && <div style={{ fontSize: '11px', color: t.textSoft }}>{new Date(r.bestDay).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</div>}
+            {r.bestDay && <div style={{ fontSize: '11px', color: t.textSoft }}>{parseLocalDate(r.bestDay).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</div>}
           </div>
         ))}
       </div>
@@ -550,12 +550,12 @@ function WallOfFame({ data, choresById, users, t, cardStyle, titleStyle }) {
         )}
         {stats.topDay && (
           <Row icon={<Award size={22} color={t.coral} />} t={t} border>
-            Giorno record: <strong>{stats.topDayN} lavori</strong> il {new Date(stats.topDay).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}
+            Giorno record: <strong>{stats.topDayN} lavori</strong> il {parseLocalDate(stats.topDay).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}
           </Row>
         )}
         {stats.topWeek && (
           <Row icon={<Heart size={22} color={t.lavender} />} t={t} border>
-            Settimana migliore di coppia: <strong>{stats.topWeekPts} punti</strong> (dal {new Date(stats.topWeek).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })})
+            Settimana migliore di coppia: <strong>{stats.topWeekPts} punti</strong> (dal {parseLocalDate(stats.topWeek).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })})
           </Row>
         )}
       </div>

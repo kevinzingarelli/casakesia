@@ -13,7 +13,7 @@ import {
   pointsForEntry, choreNameForEntry, achievementContext, uid, startOfWeek,
   houseHealth, motivationalMessage, currentSeason,
   houseState, recurringStatus, rewardAchieved, recentChores, groupByDay, computeWeekWins,
-  mergeData, sameData, cloneData,
+  mergeData, sameData, cloneData, parseLocalDate,
 } from './helpers';
 import { playCompletionSound, playAchievementSound, playLevelUpSound, vibrate } from './sounds';
 import { quoteOfTheDay } from './quotes';
@@ -596,7 +596,7 @@ export default function App() {
               <div style={{ fontSize: '40px' }}>{confetti.chore.emoji}</div>
               <div style={{ fontSize: '20px', fontWeight: 700, marginTop: '4px', color: t.text }}>+{confetti.points} punti!{confetti.count > 1 ? ` (×${confetti.count})` : ''}</div>
               <div style={{ fontSize: '14px', color: t.textSoft, marginTop: '2px' }}>{confetti.user.emoji} {confetti.user.name}</div>
-              {confetti.retro && <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '4px' }}>📅 retrodatato al {new Date(confetti.retro).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</div>}
+              {confetti.retro && <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '4px' }}>📅 retrodatato al {parseLocalDate(confetti.retro).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</div>}
               {confetti.dedicated && <div style={{ fontSize: '13px', color: confetti.user.color, marginTop: '6px', fontWeight: 700 }}>❤️ Dedicato a {confetti.dedicated.name}</div>}
               {confetti.levelUp && (
                 <div className="pop-card achievement-toast" style={{ marginTop: '12px', background: confetti.user.color, borderRadius: '14px', padding: '10px 16px' }}>
@@ -824,7 +824,7 @@ export default function App() {
                 <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, display: 'flex', alignItems: 'center', gap: '6px' }}><Target size={16} color={t.lavender} /> Obiettivo di coppia</div>
                 <button onClick={() => setShowGoalEdit(true)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', fontSize: '12px' }}><Pencil size={14} /></button>
               </div>
-              <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '8px' }}>{coupleGoalProgress.current} / {coupleGoalProgress.target} punti insieme {coupleGoalProgress.deadline ? `entro ${new Date(coupleGoalProgress.deadline).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}` : ''}</div>
+              <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '8px' }}>{coupleGoalProgress.current} / {coupleGoalProgress.target} punti insieme {coupleGoalProgress.deadline ? `entro ${parseLocalDate(coupleGoalProgress.deadline).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}` : ''}</div>
               <div style={{ height: '14px', background: t.line, borderRadius: '8px', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${coupleGoalProgress.pct}%`, background: `linear-gradient(90deg, ${t.lavender}, ${t.mint})`, borderRadius: '8px', transition: 'width 0.6s', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '6px' }}>
                   {coupleGoalProgress.pct > 15 && <span style={{ fontSize: '10px', color: '#fff', fontWeight: 800 }}>{coupleGoalProgress.pct}%</span>}

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Flame, Shield, X, Check, ChevronLeft, ChevronRight, Info } from 'lucide-react';
-import { computeStreakHistory, computeStreak, computeBestStreak, todayStr } from './helpers';
+import { computeStreakHistory, computeStreak, computeBestStreak, todayStr, parseLocalDate } from './helpers';
 
 const REASONS = [
   { id: 'vacation', label: '🏖️ Vacanza', short: 'Vacanza' },
@@ -83,7 +83,7 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
     const weeks = [];
     let week = [];
     // Riempiamo la prima settimana se non inizia di lunedì
-    const first = new Date(history[0].date);
+    const first = parseLocalDate(history[0].date);
     const startOffset = (first.getDay() + 6) % 7; // 0=lun
     for (let i = 0; i < startOffset; i++) week.push(null);
     history.forEach((d) => {
@@ -110,7 +110,7 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
               <button onClick={() => setSelectedDay(null)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><X size={22} /></button>
             </div>
             <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '18px' }}>
-              {new Date(selectedDay.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              {parseLocalDate(selectedDay.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               {selectedDay.count > 0 && ` · ${selectedDay.count} lavori svolti`}
             </div>
 
@@ -238,7 +238,7 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
                       <button
                         key={di}
                         onClick={() => handleDayTap(day, user.id)}
-                        title={`${day.date}${day.reason ? ' · ' + REASONS.find((r) => r.id === day.reason)?.short : ''}`}
+                        title={`${day.date}${day.status === 'excused' && day.reason ? ' · ' + REASONS.find((r) => r.id === day.reason)?.short : ''}`}
                         style={{
                           aspectRatio: '1',
                           borderRadius: '6px',
@@ -289,12 +289,14 @@ function StreakSegments({ history, t }) {
   const segments = useMemo(() => {
     const result = [];
     let current = null;
+    // Il giorno odierno ancora aperto ('open') non allunga né interrompe la
+    // serie: conta solo una volta confermato, come il "🔥" in alto.
     history.forEach((d) => {
-      if (d.status === 'done' || d.status === 'excused' || d.status === 'open') {
+      if (d.status === 'done' || d.status === 'excused') {
         if (!current) current = { start: d.date, end: d.date, len: 1 };
         else { current.end = d.date; current.len++; }
-      } else {
-        if (current) { result.push(current); current = null; }
+      } else if (d.status !== 'open' && current) {
+        result.push(current); current = null;
       }
     });
     if (current) result.push(current);
@@ -312,7 +314,7 @@ function StreakSegments({ history, t }) {
             <div style={{ width: `${Math.min(100, (s.len / segments[0].len) * 100)}%`, height: '6px', background: i === 0 ? t.coral : t.lavender, borderRadius: '4px', minWidth: '24px', transition: 'width 0.5s' }} />
             <span style={{ fontSize: '12px', fontWeight: 700, color: t.text, whiteSpace: 'nowrap' }}>{s.len} gg</span>
             <span style={{ fontSize: '11px', color: t.textSoft, whiteSpace: 'nowrap' }}>
-              {new Date(s.start).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} – {new Date(s.end).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
+              {parseLocalDate(s.start).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} – {parseLocalDate(s.end).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
             </span>
           </div>
         ))}
