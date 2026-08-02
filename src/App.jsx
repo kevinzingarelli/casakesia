@@ -417,6 +417,17 @@ export default function App() {
 
     setConfetti({ user, chore, count: entries.length, points: totalPts, achievement: justUnlocked, levelUp: leveledUp ? newLevel : null, dedicated: dedicate && otherUser ? otherUser : null, retro: !isToday ? dateStr : null });
     setTimeout(() => setConfetti(null), (justUnlocked || leveledUp) ? 2800 : 2000);
+
+    // Notifica all'altra persona solo per i momenti che contano: traguardo
+    // sbloccato o cambio livello. Non per ogni singolo lavoro, altrimenti
+    // diventa fastidiosa (scelta confermata da Kevin il 02/08/2026).
+    if (otherId && (leveledUp || justUnlocked)) {
+      if (leveledUp) {
+        notify(otherId, `${newLevel.emoji} ${user.name} è salito di livello!`, `Ora è "${newLevel.title}"`);
+      } else if (justUnlocked) {
+        notify(otherId, `${justUnlocked.emoji} ${user.name} ha sbloccato un traguardo!`, justUnlocked.title);
+      }
+    }
   };
 
   const removeEntry = (id) => {

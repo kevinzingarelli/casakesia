@@ -7,9 +7,19 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '12';
+export const CURRENT_VERSION = '13';
 
 export const CHANGELOG = [
+  {
+    version: '13',
+    date: '2026-08-02',
+    time: '16:00',
+    title: 'Notifiche anche per traguardi e livelli',
+    items: [
+      'Quando sblocchi un traguardo o sali di livello, l\'altra persona lo scopre subito con una notifica — non serve più aprire l\'app per fare il tifo',
+      'Non arriva una notifica per ogni singolo lavoro segnato: solo per questi momenti importanti, così restano un\'aggiunta piacevole e non un fastidio',
+    ],
+  },
   {
     version: '12',
     date: '2026-08-02',
