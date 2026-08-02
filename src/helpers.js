@@ -75,10 +75,45 @@ export function houseState(score) {
 }
 
 // Stato di un lavoro ricorrente: quando è stato fatto l'ultima volta e se è in scadenza
+// Prossimo giorno (incluso quello di partenza) che cade in weekdaySet
+// (0=domenica...6=sabato, come Date.getDay()).
+function nextWeekdayOnOrAfter(date, weekdaySet) {
+  const d = new Date(date);
+  for (let i = 0; i < 7; i++) {
+    if (weekdaySet.has(d.getDay())) return d;
+    d.setDate(d.getDate() + 1);
+  }
+  return d;
+}
+
 export function recurringStatus(chore, log) {
-  if (!chore.recurrence || !chore.recurrence.days) return null;
-  const days = chore.recurrence.days;
+  const rec = chore.recurrence;
+  if (!rec || (!rec.days && !(rec.weekdays && rec.weekdays.length))) return null;
   const entries = log.filter((e) => e.choreId === chore.id).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  // Giorni fissi della settimana (es. "ogni lunedì e giovedì")
+  if (rec.weekdays && rec.weekdays.length) {
+    const weekdaySet = new Set(rec.weekdays);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let searchStart = today;
+    if (entries.length > 0) {
+      const last = new Date(entries[0].timestamp);
+      const lastDay = new Date(last.getFullYear(), last.getMonth(), last.getDate());
+      if (lastDay.getTime() === today.getTime()) {
+        // già fatto oggi: il prossimo giro parte da domani
+        searchStart = new Date(today); searchStart.setDate(searchStart.getDate() + 1);
+      }
+    }
+    const next = nextWeekdayOnOrAfter(searchStart, weekdaySet);
+    const daysLeft = Math.round((next - today) / 86400000);
+    let status = 'ok';
+    if (daysLeft <= 0) status = 'overdue';
+    else if (daysLeft <= 1) status = 'due';
+    return { status, daysLeft, lastDone: entries[0]?.date || null, weekdays: rec.weekdays };
+  }
+
+  // Ogni N giorni dall'ultima volta
+  const days = rec.days;
   if (entries.length === 0) return { status: 'due', daysLeft: 0, lastDone: null, every: days };
   const last = new Date(entries[0].timestamp);
   const next = new Date(last); next.setDate(next.getDate() + days);
@@ -336,6 +371,10 @@ export const PERIOD_LABELS = {
 // I log NON memorizzano i punti: li calcoliamo dalla definizione corrente del lavoro.
 // Per i lavori eliminati usiamo lo snapshot salvato nel log (fallback).
 export function pointsForEntry(entry, choresById) {
+  // Correzione manuale di una singola voce (dallo Storico): vince su tutto,
+  // anche se in seguito cambiano i punti del lavoro nel catalogo.
+  if (entry.pointsOverride != null) return entry.pointsOverride;
+
   const chore = choresById[entry.choreId];
 
   // Sotto-task indipendente: usa i punti del sotto-task

@@ -17,6 +17,7 @@ import {
 } from './helpers';
 import { playCompletionSound, playAchievementSound, playLevelUpSound, vibrate, playPackPreview, SOUND_PACKS, DEFAULT_PACK } from './sounds';
 import { quoteOfTheDay } from './quotes';
+import { buildDemoData } from './demoData';
 import HouseSvg from './HouseSvg';
 import GiftsView from './GiftsView';
 import StreakView from './StreakView';
@@ -47,6 +48,7 @@ const LS_SEASONAL = 'casa-points-seasonal';
 const LS_STYLE = 'casa-points-style';
 const LS_SOUNDPACK = 'casa-points-soundpack';
 const LS_PENDING = 'casa-points-pending';   // modifiche non ancora arrivate sul server
+const LS_LAST_KNOWN = 'casa-points-last-known'; // ultima copia confermata dal server, per aprire l'app offline
 
 const SAVE_DEBOUNCE = 250;   // ms di attesa prima di scrivere su Supabase
 const RETRY_MIN = 1000;      // primo tentativo dopo un errore di rete
@@ -56,6 +58,12 @@ function loadLS(key, fallback) {
   try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; }
 }
 function saveLS(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
+
+// ?demo=1 nell'URL: mostra dati finti e non tocca mai Supabase. Serve per
+// far provare l'app (a un potenziale acquirente, in una landing page...)
+// senza esporre i dati reali di Kevin e Asia. Letto una volta sola: la
+// query string non cambia durante la vita della pagina.
+const isDemo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1';
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -75,7 +83,7 @@ export default function App() {
   const [showAddChore, setShowAddChore] = useState(false);
   const [editingChoreId, setEditingChoreId] = useState(null);
   const [error, setError] = useState(null);
-  const [identity, setIdentity] = useState(() => loadLS(LS_IDENTITY, null));
+  const [identity, setIdentity] = useState(() => (isDemo ? null : loadLS(LS_IDENTITY, null)));
   const [soundOn, setSoundOn] = useState(() => loadLS(LS_SOUND, true));
   const [dark, setDark] = useState(() => loadLS(LS_DARK, null));
   const [seasonal, setSeasonal] = useState(() => loadLS(LS_SEASONAL, true));
@@ -87,6 +95,9 @@ export default function App() {
   const [showRewards, setShowRewards] = useState(false);
   const [showSavedQuotes, setShowSavedQuotes] = useState(false);
   const [removingIds, setRemovingIds] = useState([]);
+  const [undoToast, setUndoToast] = useState(null); // { ids, label } — lavoro appena segnato, ancora annullabile
+  const undoTimerRef = useRef(null);
+  const [editingEntry, setEditingEntry] = useState(null); // voce di storico in modifica
   const [soundPack, setSoundPack] = useState(() => loadLS(LS_SOUNDPACK, DEFAULT_PACK));
   const [showNews, setShowNews] = useState(false);
   const [unreadNews, refreshUnread] = useUnreadNews();
@@ -114,7 +125,7 @@ export default function App() {
   }, []);
   useEffect(() => { if (dark !== null) saveLS(LS_DARK, dark); }, [dark]);
   useEffect(() => { saveLS(LS_SOUND, soundOn); }, [soundOn]);
-  useEffect(() => { saveLS(LS_IDENTITY, identity); }, [identity]);
+  useEffect(() => { if (!isDemo) saveLS(LS_IDENTITY, identity); }, [identity]);
   useEffect(() => { saveLS(LS_SEASONAL, seasonal); }, [seasonal]);
   useEffect(() => { saveLS(LS_STYLE, style); }, [style]);
   useEffect(() => { saveLS(LS_SOUNDPACK, soundPack); }, [soundPack]);
@@ -247,6 +258,10 @@ export default function App() {
   };
 
   const save = (next) => {
+    // Demo: si comporta come se avesse salvato, ma resta solo in memoria —
+    // niente Supabase, niente localStorage, per non confondersi con una
+    // sessione vera sullo stesso telefono.
+    if (isDemo) { dataRef.current = next; setData(next); return; }
     // Senza una lettura riuscita non sappiamo cosa c'è sul server: scrivere ora
     // significherebbe sovrascrivere i dati veri con quelli di default.
     if (!loaded.current) {
@@ -261,6 +276,16 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (isDemo) {
+      // Mai una richiesta a Supabase in modalità demo: dati finti, subito.
+      const demo = buildDemoData();
+      baseRef.current = cloneData(demo);
+      dataRef.current = demo;
+      loaded.current = true;
+      setData(demo);
+      setLoading(false);
+      return;
+    }
     let channel;
     const load = async () => {
       try {
@@ -283,13 +308,33 @@ export default function App() {
         dataRef.current = value;
         loaded.current = true;
         setData(value);
+        saveLS(LS_LAST_KNOWN, server); // per poter aprire l'app anche offline, la prossima volta
         if (dirty) { rev.current += 1; writePending(); scheduleFlush(SAVE_DEBOUNCE); }
         else clearPending();
       } catch (e) {
         console.error(e);
-        setError('Impossibile collegarsi al database condiviso.');
-        dataRef.current = cloneData(DEFAULT_DATA);
-        setData(dataRef.current);
+        // Rete assente o Supabase irraggiungibile: se abbiamo già visto i
+        // dati veri in passato, apriamo l'app con quelli invece di uno
+        // stato vuoto. Le modifiche fatte da offline si mettono comunque in
+        // coda (stesso meccanismo del salvataggio normale) e partono da
+        // sole appena torna la rete.
+        const lastKnown = loadLS(LS_LAST_KNOWN, null);
+        if (lastKnown) {
+          let value = cloneData(lastKnown);
+          const pending = loadLS(LS_PENDING, null);
+          if (pending && pending.base && pending.local) {
+            value = mergeData(pending.base, pending.local, value);
+          }
+          baseRef.current = cloneData(lastKnown);
+          dataRef.current = value;
+          loaded.current = true;
+          setData(value);
+          setError('Sei offline: stai vedendo l\'ultimo salvataggio. Le modifiche partiranno da sole appena torna la rete.');
+        } else {
+          setError('Impossibile collegarsi al database condiviso.');
+          dataRef.current = cloneData(DEFAULT_DATA);
+          setData(dataRef.current);
+        }
       } finally { setLoading(false); }
     };
     load();
@@ -427,6 +472,12 @@ export default function App() {
     setConfetti({ user, chore, count: entries.length, points: totalPts, achievement: justUnlocked, levelUp: leveledUp ? newLevel : null, dedicated: dedicate && otherUser ? otherUser : null, retro: !isToday ? dateStr : null });
     setTimeout(() => setConfetti(null), (justUnlocked || leveledUp) ? 2800 : 2000);
 
+    // Qualche secondo per rimediare a un tocco sbagliato, senza dover
+    // andare nello Storico a cancellare a mano.
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast({ ids: entries.map((e) => e.id), label: entries.length > 1 ? `${entries.length} lavori segnati` : chore.name });
+    undoTimerRef.current = setTimeout(() => setUndoToast(null), 6000);
+
     // Notifica all'altra persona solo per i momenti che contano: traguardo
     // sbloccato o cambio livello. Non per ogni singolo lavoro, altrimenti
     // diventa fastidiosa (scelta confermata da Kevin il 02/08/2026).
@@ -446,6 +497,24 @@ export default function App() {
       save({ ...dataRef.current, log: dataRef.current.log.filter((e) => e.id !== id) });
       setRemovingIds((ids) => ids.filter((x) => x !== id));
     }, 280);
+  };
+
+  // Toglie SOLO le voci appena aggiunte (per id), non l'intero stato: al
+  // sicuro anche se nel frattempo è arrivata una sincronizzazione dall'altro
+  // telefono, che non verrebbe toccata.
+  const undoLog = (ids) => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast(null);
+    save({ ...dataRef.current, log: dataRef.current.log.filter((e) => !ids.includes(e.id)) });
+    vibrate(10);
+  };
+
+  // Correzione di una voce di storico già registrata (punti e data)
+  const updateEntry = (id, patch) => {
+    save({
+      ...dataRef.current,
+      log: dataRef.current.log.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+    });
   };
   const updateUser = (id, patch) => save({ ...dataRef.current, users: dataRef.current.users.map((u) => (u.id === id ? { ...u, ...patch } : u)) });
 
@@ -539,6 +608,7 @@ export default function App() {
 
   // Spedisce e, se il server segnala iscrizioni ormai morte, le ripulisce
   const notify = async (toUserId, title, message) => {
+    if (isDemo) return; // niente chiamate di rete finte in demo
     const res = await sendPush({ toUserId, title, message, url: '/', tag: 'regali' });
     if (res && res.failed && res.failed.length) {
       const dead = new Set(res.failed);
@@ -590,6 +660,7 @@ export default function App() {
     };
     save({ ...dataRef.current, giftRequests: [req, ...(dataRef.current.giftRequests || [])] });
     vibrate(15);
+    playCompletionSound(8, soundOn, soundPack);
     notify(otherUser.id, `${gift.emoji} ${me.name} ti ha chiesto un regalo`,
       `${gift.name} · per ${giftDayLabel(date)}${note ? ` — «${note}»` : ''}`);
   };
@@ -976,6 +1047,14 @@ export default function App() {
         </div>
       </div>
 
+      {/* Modalità demo: sempre visibile, per non confonderla mai con dati veri */}
+      {isDemo && (
+        <div style={{ margin: '0 18px 12px', background: '#2D2A4A', color: '#fff', borderRadius: '14px', padding: '10px 14px', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+          <span>Modalità demo — dati finti, niente viene salvato</span>
+          <a href="/" style={{ color: '#fff', textDecoration: 'underline', flexShrink: 0 }}>Esci</a>
+        </div>
+      )}
+
       {/* Banner identità */}
       {!me && (
         <div className="slide-up" style={{ margin: '0 18px 12px', background: t.card, borderRadius: '16px', padding: '14px', boxShadow: cardShadow }}>
@@ -1310,7 +1389,8 @@ export default function App() {
                               <div style={{ fontSize: '12px', color: t.textSoft, display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: u?.color, display: 'inline-block' }} /> {u?.name} · {formatTime(e.timestamp)}{dedUser ? ` · per ${dedUser.name}` : ''}</div>
                             </div>
                             <div style={{ fontWeight: 800, color: u?.color }} className="display">+{pointsForEntry(e, choresById)}</div>
-                            <button onClick={() => removeEntry(e.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><Trash2 size={16} /></button>
+                            <button onClick={() => setEditingEntry({ ...e, editPoints: pointsForEntry(e, choresById) })} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '4px' }}><Pencil size={15} /></button>
+                            <button onClick={() => removeEntry(e.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '4px' }}><Trash2 size={16} /></button>
                           </div>
                         );
                       })}
@@ -1375,6 +1455,23 @@ export default function App() {
       {/* Novità dell'app + invito ad aggiornare */}
       {showNews && <NewsModal t={t} dark={dark} onClose={() => setShowNews(false)} onReadChange={refreshUnread} />}
       <UpdateBanner t={t} onOpenNews={() => setShowNews(true)} />
+
+      {/* Correzione voce di storico */}
+      {editingEntry && (
+        <EditEntryModal
+          entry={editingEntry} t={t}
+          onSave={(patch) => { updateEntry(editingEntry.id, patch); setEditingEntry(null); }}
+          onClose={() => setEditingEntry(null)}
+        />
+      )}
+
+      {/* Annulla l'ultimo lavoro segnato */}
+      {undoToast && (
+        <div className="slide-up" style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 'calc(88px + env(safe-area-inset-bottom))', zIndex: 65, background: dark ? '#2D2A4A' : '#2D2A4A', color: '#fff', borderRadius: '16px', padding: '10px 10px 10px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: '12px', maxWidth: 'min(360px, calc(100vw - 32px))' }}>
+          <span style={{ fontSize: '13px', fontWeight: 600 }}>{undoToast.label} segnato</span>
+          <button onClick={() => undoLog(undoToast.ids)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: '10px', padding: '8px 12px', fontWeight: 800, fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Annulla</button>
+        </div>
+      )}
 
       {/* Bottom nav */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: t.navBg, backdropFilter: t.blur, WebkitBackdropFilter: t.blur, boxShadow: dark ? '0 -4px 16px rgba(0,0,0,0.4)' : '0 -4px 16px rgba(45,42,74,0.08)', borderTop: t.style === 'minimal' ? `0.5px solid ${t.line}` : 'none', display: 'flex', justifyContent: 'space-around', padding: '10px 2px calc(14px + env(safe-area-inset-bottom))', borderRadius: t.style === 'minimal' ? '0' : '20px 20px 0 0' }}>
@@ -1594,6 +1691,34 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
   );
 }
 
+function EditEntryModal({ entry, onSave, onClose, t }) {
+  const [points, setPoints] = useState(entry.editPoints);
+  const [date, setDate] = useState(entry.date);
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,74,0.45)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }} onClick={onClose}>
+      <div className="pop-card" style={{ background: t.card, borderRadius: '24px', padding: '24px', maxWidth: '340px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+        <div className="display" style={{ fontSize: '18px', fontWeight: 700, color: t.text, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}><Pencil size={18} color={t.lavender} /> Correggi voce</div>
+        <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '16px' }}>{entry.snapshotName}</div>
+        <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>Punti</div>
+        <input type="number" value={points} onChange={(e) => setPoints(Number(e.target.value) || 0)} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '15px', marginBottom: '12px', fontWeight: 700 }} />
+        <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>Data</div>
+        <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '16px' }} />
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={onClose} style={{ background: t.line, border: 'none', color: t.textSoft, borderRadius: '12px', padding: '12px 16px', fontWeight: 700, cursor: 'pointer' }}>Annulla</button>
+          <button
+            onClick={() => {
+              const isToday = date === todayStr();
+              const ts = isToday ? new Date().toISOString() : new Date(`${date}T12:00:00`).toISOString();
+              onSave({ pointsOverride: points, date, timestamp: ts });
+            }}
+            style={{ flex: 1, background: t.mint, border: 'none', color: '#fff', borderRadius: '12px', padding: '12px', fontWeight: 700, cursor: 'pointer' }}
+          >Salva</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GoalEditModal({ current, onSave, onClose, t }) {
   const [target, setTarget] = useState(current?.target || 500);
   const [deadline, setDeadline] = useState(current?.deadline || '');
@@ -1646,6 +1771,12 @@ function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, onLogSubtas
   const rec = log ? recurringStatus(chore, log) : null;
   if (editing) {
     const recDays = draft.recurrence?.days || 0;
+    const recWeekdays = draft.recurrence?.weekdays || [];
+    const WEEKDAY_LABELS = [['L', 1], ['M', 2], ['M', 3], ['G', 4], ['V', 5], ['S', 6], ['D', 0]];
+    const toggleWeekday = (d) => {
+      const next = recWeekdays.includes(d) ? recWeekdays.filter((x) => x !== d) : [...recWeekdays, d];
+      setDraft({ ...draft, recurrence: next.length ? { weekdays: next } : null });
+    };
     return (
       <div className="pop-card" style={{ background: t.card, borderRadius: t.radiusSm, padding: '14px', boxShadow: '0 6px 16px rgba(45,42,74,0.1)' }}>
         <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, marginBottom: '8px', fontSize: '14px', fontFamily: 'inherit', fontWeight: 700 }} />
@@ -1658,7 +1789,13 @@ function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, onLogSubtas
         <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '12px', color: t.textSoft, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}><Repeat size={14} /> Ricorrenza:</span>
           {[[0, 'No'], [1, 'Ogni giorno'], [3, 'Ogni 3 gg'], [7, 'Ogni settimana'], [14, 'Ogni 2 sett.'], [30, 'Ogni mese']].map(([d, label]) => (
-            <button key={d} onClick={() => setDraft({ ...draft, recurrence: d ? { days: d } : null })} style={{ padding: '6px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 700, background: recDays === d ? t.lavender : t.line, color: recDays === d ? '#fff' : t.textSoft }}>{label}</button>
+            <button key={d} onClick={() => setDraft({ ...draft, recurrence: d ? { days: d } : null })} style={{ padding: '6px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 700, background: recDays === d && recWeekdays.length === 0 ? t.lavender : t.line, color: recDays === d && recWeekdays.length === 0 ? '#fff' : t.textSoft }}>{label}</button>
+          ))}
+        </div>
+        <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '11px', color: t.textSoft }}>oppure giorni fissi:</span>
+          {WEEKDAY_LABELS.map(([label, d]) => (
+            <button key={d} onClick={() => toggleWeekday(d)} style={{ width: '26px', height: '26px', borderRadius: '50%', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 800, background: recWeekdays.includes(d) ? t.coral : t.line, color: recWeekdays.includes(d) ? '#fff' : t.textSoft }}>{label}</button>
           ))}
         </div>
 

@@ -7,9 +7,23 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '15';
+export const CURRENT_VERSION = '16';
 
 export const CHANGELOG = [
+  {
+    version: '16',
+    date: '2026-08-02',
+    time: '23:39',
+    title: 'Annulla, storico modificabile, giorni fissi per i lavori',
+    items: [
+      'Segnato un lavoro per sbaglio? Ora compare "Annulla" per qualche secondo subito dopo, senza dover cancellare la voce dallo storico',
+      'Nello Storico ora si può correggere una voce già segnata (punti e data) con la matitina, non solo cancellarla',
+      'I lavori ricorrenti si possono impostare anche su giorni fissi della settimana (es. "ogni lunedì e giovedì"), oltre al classico "ogni tot giorni"',
+      'Se il telefono perde la connessione, l\'app ora mostra gli ultimi dati salvati invece di un errore bloccante, e riprova da sola quando torna la rete',
+      'Aggiunto un suono quando si chiede un regalo, come già succede quando si segna un lavoro',
+      'NUOVO: modalità dimostrativa per far provare l\'app a chi deve ancora decidere se comprarla — dati finti, nessuna scrittura sul database vero (si apre con ?demo=1 nel link)',
+    ],
+  },
   {
     version: '15',
     date: '2026-08-02',
