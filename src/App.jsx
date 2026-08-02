@@ -3,7 +3,7 @@ import {
   Home, ListChecks, History, BarChart3, Settings, Plus, Minus, Flame, Trophy, Sparkles,
   Trash2, Check, Pencil, X, RotateCcw, Crown, Volume2, VolumeX, Moon, Sun, Download,
   Calendar, Heart, Target, AlertTriangle, Palmtree, Share2, LayoutGrid, Clock, Zap,
-  Search, Gift, Bell, Repeat, Bookmark, Sparkle as SparkleIcon, Star,
+  Search, Gift, Bell, Repeat, Bookmark, Sparkle as SparkleIcon, Star, Music,
 } from 'lucide-react';
 import { supabase, TABLE, DATA_ROW_ID } from './supabaseClient';
 import {
@@ -13,23 +13,26 @@ import {
   pointsForEntry, choreNameForEntry, achievementContext, uid, startOfWeek,
   houseHealth, motivationalMessage, currentSeason,
   houseState, recurringStatus, rewardAchieved, recentChores, groupByDay, computeWeekWins,
-  mergeData, sameData, cloneData, parseLocalDate,
+  mergeData, sameData, cloneData, parseLocalDate, DEFAULT_GIFTS,
 } from './helpers';
-import { playCompletionSound, playAchievementSound, playLevelUpSound, vibrate } from './sounds';
+import { playCompletionSound, playAchievementSound, playLevelUpSound, vibrate, playPackPreview, SOUND_PACKS, DEFAULT_PACK } from './sounds';
 import { quoteOfTheDay } from './quotes';
 import StatsView from './StatsView';
 import WidgetScreen from './WidgetScreen';
 import ShareCard from './ShareCard';
 import HouseSvg from './HouseSvg';
 import StreakView from './StreakView';
+import GiftsView from './GiftsView';
+import { NewsModal, UpdateBanner, useUnreadNews } from './News';
 
-const DEFAULT_DATA = { users: DEFAULT_USERS, chores: DEFAULT_CHORES, log: [], version: 7, coupleGoal: null, vacations: {}, penaltiesOn: false, customCategories: [], categories: [...CATEGORIES], rewards: [], savedQuotes: [], excused: {} };
+const DEFAULT_DATA = { users: DEFAULT_USERS, chores: DEFAULT_CHORES, log: [], version: 8, coupleGoal: null, vacations: {}, penaltiesOn: false, customCategories: [], categories: [...CATEGORIES], rewards: [], savedQuotes: [], excused: {}, gifts: [...DEFAULT_GIFTS], giftRequests: [] };
 
 const LS_IDENTITY = 'casa-points-identity';
 const LS_SOUND = 'casa-points-sound';
 const LS_DARK = 'casa-points-dark';
 const LS_SEASONAL = 'casa-points-seasonal';
 const LS_STYLE = 'casa-points-style';
+const LS_SOUNDPACK = 'casa-points-soundpack';
 const LS_PENDING = 'casa-points-pending';   // modifiche non ancora arrivate sul server
 
 const SAVE_DEBOUNCE = 250;   // ms di attesa prima di scrivere su Supabase
@@ -71,6 +74,9 @@ export default function App() {
   const [showRewards, setShowRewards] = useState(false);
   const [showSavedQuotes, setShowSavedQuotes] = useState(false);
   const [removingIds, setRemovingIds] = useState([]);
+  const [soundPack, setSoundPack] = useState(() => loadLS(LS_SOUNDPACK, DEFAULT_PACK));
+  const [showNews, setShowNews] = useState(false);
+  const [unreadNews, refreshUnread] = useUnreadNews();
   const dataRef = useRef(null);
   const saveTimer = useRef(null);
   const baseRef = useRef(null);       // ultimo stato confermato dal server
@@ -95,6 +101,7 @@ export default function App() {
   useEffect(() => { saveLS(LS_IDENTITY, identity); }, [identity]);
   useEffect(() => { saveLS(LS_SEASONAL, seasonal); }, [seasonal]);
   useEffect(() => { saveLS(LS_STYLE, style); }, [style]);
+  useEffect(() => { saveLS(LS_SOUNDPACK, soundPack); }, [soundPack]);
 
   const choresById = useMemo(() => {
     const m = {};
@@ -152,6 +159,12 @@ export default function App() {
             return { ...ch, subtasks: ch.subtasks || [] };
           });
           value.version = 7;
+        }
+        if (value.version < 8) {
+          // Regali: catalogo di partenza + elenco richieste vuoto
+          value.gifts = (value.gifts && value.gifts.length) ? value.gifts : cloneData(DEFAULT_GIFTS);
+          value.giftRequests = value.giftRequests || [];
+          value.version = 8;
         }
     }
     return value;
@@ -373,9 +386,9 @@ export default function App() {
     const totalPts = entries.reduce((s, e) => s + e.snapshotPoints, 0);
     const vibPat = entries.length > 1 ? [10, 30, 10, 30, 10] : 15;
     vibrate(vibPat);
-    if (leveledUp) playLevelUpSound(soundOn);
-    else if (justUnlocked) playAchievementSound(soundOn);
-    else playCompletionSound(chore.points, soundOn);
+    if (leveledUp) playLevelUpSound(soundOn, soundPack);
+    else if (justUnlocked) playAchievementSound(soundOn, soundPack);
+    else playCompletionSound(totalPts, soundOn, soundPack);
 
     setConfetti({ user, chore, count: entries.length, points: totalPts, achievement: justUnlocked, levelUp: leveledUp ? newLevel : null, dedicated: dedicate && otherUser ? otherUser : null, retro: !isToday ? dateStr : null });
     setTimeout(() => setConfetti(null), (justUnlocked || leveledUp) ? 2800 : 2000);
@@ -432,6 +445,58 @@ export default function App() {
   const removeReward = (id) => save({ ...dataRef.current, rewards: (dataRef.current.rewards || []).filter((r) => r.id !== id) });
   const claimReward = (id) => save({ ...dataRef.current, rewards: (dataRef.current.rewards || []).map((r) => (r.id === id ? { ...r, claimed: true, claimedAt: todayStr(), claimedBy: identity } : r)) });
 
+  // Regali: catalogo condiviso + richieste da una persona all'altra
+  const addGift = (gift) => {
+    const name = (gift.name || '').trim();
+    if (!name) return;
+    const existing = dataRef.current.gifts || [];
+    if (existing.some((g) => g.name.toLowerCase() === name.toLowerCase())) return;
+    save({ ...dataRef.current, gifts: [...existing, { id: `gift-${uid()}`, name, emoji: gift.emoji || '🎁' }] });
+  };
+  const removeGift = (id) => save({ ...dataRef.current, gifts: (dataRef.current.gifts || []).filter((g) => g.id !== id) });
+
+  const requestGift = (gift, date, note) => {
+    if (!me || !otherUser) return;
+    const req = {
+      id: `greq-${uid()}`,
+      giftId: gift.id,
+      snapshotName: gift.name,
+      snapshotEmoji: gift.emoji,
+      fromUserId: me.id,
+      toUserId: otherUser.id,
+      date,
+      note: note || '',
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+    save({ ...dataRef.current, giftRequests: [req, ...(dataRef.current.giftRequests || [])] });
+    vibrate(15);
+  };
+
+  const respondGift = (id, accept, replyNote) => {
+    save({
+      ...dataRef.current,
+      giftRequests: (dataRef.current.giftRequests || []).map((r) => (r.id === id
+        ? { ...r, status: accept ? 'accepted' : 'declined', replyNote: replyNote || '', respondedAt: new Date().toISOString() }
+        : r)),
+    });
+    vibrate(accept ? [10, 30, 10] : 10);
+    if (accept) playAchievementSound(soundOn, soundPack);
+  };
+
+  const giftDone = (id) => {
+    save({
+      ...dataRef.current,
+      giftRequests: (dataRef.current.giftRequests || []).map((r) => (r.id === id
+        ? { ...r, status: 'done', doneAt: new Date().toISOString() }
+        : r)),
+    });
+    vibrate([10, 30, 10, 30, 10]);
+    playLevelUpSound(soundOn, soundPack);
+  };
+
+  const deleteGiftRequest = (id) => save({ ...dataRef.current, giftRequests: (dataRef.current.giftRequests || []).filter((r) => r.id !== id) });
+
   // Citazioni salvate
   const isQuoteSaved = (q) => (dataRef.current.savedQuotes || []).some((s) => s.text === q.text);
   const toggleSaveQuote = (q) => {
@@ -486,6 +551,14 @@ export default function App() {
     // Se il task ha sotto-task, default: solo il genitore selezionato
     // Se non ha sotto-task, selezione implicita del genitore
     setPickerSelections(['parent']);
+    setPickerChore(chore);
+  };
+
+  // Tocco diretto su una sotto-task dalla lista: apre la conferma con SOLO
+  // quella selezionata, senza il lavoro principale.
+  const handleSubtaskClick = (chore, sub) => {
+    setPickerCount(1); setPickerDate(todayStr()); setPickerDedicate(false);
+    setPickerSelections([sub.id]);
     setPickerChore(chore);
   };
 
@@ -758,6 +831,10 @@ export default function App() {
           <p style={{ margin: '2px 0 0', color: t.textSoft, fontSize: '13px' }}>{me ? `Ciao ${me.name}! ${me.emoji}` : 'Dividetevi i lavori, raccogliete punti'}</p>
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
+          <button onClick={() => setShowNews(true)} className="nav-btn" style={{ position: 'relative', background: t.card, border: 'none', borderRadius: '12px', width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textSoft, cursor: 'pointer', boxShadow: cardShadow }}>
+            <Bell size={18} />
+            {unreadNews > 0 && <span style={{ position: 'absolute', top: '7px', right: '7px', width: '9px', height: '9px', borderRadius: '50%', background: t.coral, border: `2px solid ${t.card}` }} />}
+          </button>
           <button onClick={() => setShowShare(true)} className="nav-btn" style={{ background: t.card, border: 'none', borderRadius: '12px', width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textSoft, cursor: 'pointer', boxShadow: cardShadow }}><Share2 size={18} /></button>
           <button onClick={() => setSoundOn((s) => !s)} className="nav-btn" style={{ background: t.card, border: 'none', borderRadius: '12px', width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textSoft, cursor: 'pointer', boxShadow: cardShadow }}>{soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />}</button>
           <button onClick={() => setDark((d) => !d)} className="nav-btn" style={{ background: t.card, border: 'none', borderRadius: '12px', width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textSoft, cursor: 'pointer', boxShadow: cardShadow }}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button>
@@ -1030,6 +1107,7 @@ export default function App() {
                   onEdit={() => setEditingChoreId(editingChoreId === c.id ? null : c.id)}
                   onSave={(patch) => { updateChore(c.id, patch); setEditingChoreId(null); }}
                   onDelete={() => removeChore(c.id)} onLog={() => handleChoreClick(c)}
+                  onLogSubtask={(sub) => handleSubtaskClick(c, sub)}
                   onRecurrence={(days) => setChoreRecurrence(c.id, days)} />
               ));
             })()}
@@ -1105,6 +1183,15 @@ export default function App() {
         </div>
       )}
 
+      {/* ===== REGALI ===== */}
+      {tab === 'gifts' && (
+        <GiftsView
+          data={data} me={me} otherUser={otherUser} t={t} dark={dark} cardShadow={cardShadow}
+          onAddGift={addGift} onRemoveGift={removeGift} onRequestGift={requestGift}
+          onRespondGift={respondGift} onGiftDone={giftDone} onDeleteRequest={deleteGiftRequest}
+        />
+      )}
+
       {/* ===== STATS ===== */}
       {tab === 'stats' && <StatsView data={data} choresById={choresById} t={t} dark={dark} />}
 
@@ -1119,6 +1206,8 @@ export default function App() {
           penaltiesOn={data.penaltiesOn} togglePenalties={togglePenalties} vacations={data.vacations} setVacation={setVacation}
           onOpenRewards={() => setShowRewards(true)} onOpenSavedQuotes={() => setShowSavedQuotes(true)}
           onOpenWidgetPreview={() => setTab('widget')}
+          soundPack={soundPack} setSoundPack={setSoundPack}
+          onOpenNews={() => setShowNews(true)} unreadNews={unreadNews}
           savedCount={(data.savedQuotes || []).length}
         />
       )}
@@ -1137,18 +1226,30 @@ export default function App() {
         <SavedQuotesModal saved={data.savedQuotes || []} t={t} onRemove={(q) => toggleSaveQuote(q)} onClose={() => setShowSavedQuotes(false)} />
       )}
 
+      {/* Novità dell'app + invito ad aggiornare */}
+      {showNews && <NewsModal t={t} dark={dark} onClose={() => setShowNews(false)} onReadChange={refreshUnread} />}
+      <UpdateBanner t={t} onOpenNews={() => setShowNews(true)} />
+
       {/* Bottom nav */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: t.navBg, backdropFilter: t.blur, WebkitBackdropFilter: t.blur, boxShadow: dark ? '0 -4px 16px rgba(0,0,0,0.4)' : '0 -4px 16px rgba(45,42,74,0.08)', borderTop: t.style === 'minimal' ? `0.5px solid ${t.line}` : 'none', display: 'flex', justifyContent: 'space-around', padding: '10px 2px calc(14px + env(safe-area-inset-bottom))', borderRadius: t.style === 'minimal' ? '0' : '20px 20px 0 0' }}>
         {[
           { id: 'home', icon: Home, label: 'Home' },
           { id: 'chores', icon: ListChecks, label: 'Lavori' },
+          { id: 'gifts', icon: Gift, label: 'Regali' },
           { id: 'history', icon: History, label: 'Storico' },
           { id: 'streak', icon: Flame, label: 'Serie' },
           { id: 'stats', icon: BarChart3, label: 'Stats' },
           { id: 'settings', icon: Settings, label: 'Opzioni' },
         ].map((it) => {
           const Icon = it.icon; const active = tab === it.id;
-          return <button key={it.id} onClick={() => setTab(it.id)} className="nav-btn" style={{ background: 'transparent', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', color: active ? t.coral : t.textSoft, cursor: 'pointer', fontSize: '11px', fontWeight: 700, flex: 1, minHeight: '50px', padding: '4px 0' }}><Icon size={23} />{it.label}</button>;
+          const pending = it.id === 'gifts' && me ? (data.giftRequests || []).filter((r) => r.toUserId === me.id && r.status === 'pending').length : 0;
+          return (
+            <button key={it.id} onClick={() => setTab(it.id)} className="nav-btn" style={{ position: 'relative', background: 'transparent', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', color: active ? t.coral : t.textSoft, cursor: 'pointer', fontSize: '10.5px', fontWeight: 700, flex: 1, minHeight: '50px', padding: '4px 0' }}>
+              <Icon size={22} />
+              {it.label}
+              {pending > 0 && <span style={{ position: 'absolute', top: '2px', right: 'calc(50% - 18px)', minWidth: '16px', height: '16px', borderRadius: '8px', background: t.coral, color: '#fff', fontSize: '10px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{pending}</span>}
+            </button>
+          );
         })}
       </div>
     </div>
@@ -1159,7 +1260,7 @@ export default function App() {
 // COMPONENTI AUSILIARI
 // ============================================================
 
-function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, style, setStyle, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, renameCategory, removeCategory, choresUsingCategory, penaltiesOn, togglePenalties, vacations, setVacation, onOpenRewards, onOpenSavedQuotes, savedCount, onOpenWidgetPreview }) {
+function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, style, setStyle, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, renameCategory, removeCategory, choresUsingCategory, penaltiesOn, togglePenalties, vacations, setVacation, onOpenRewards, onOpenSavedQuotes, savedCount, onOpenWidgetPreview, soundPack, setSoundPack, onOpenNews, unreadNews }) {
   const [newCat, setNewCat] = useState('');
   const customCats = data.customCategories || [];
 
@@ -1264,8 +1365,12 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
       <button onClick={onOpenSavedQuotes} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '10px', boxShadow: cardShadow }}>
         <Bookmark size={18} color={t.coral} /> Citazioni salvate <span style={{ marginLeft: 'auto', color: t.textSoft, fontSize: '12px' }}>{savedCount}</span>
       </button>
-      <button onClick={onOpenWidgetPreview} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '20px', boxShadow: cardShadow }}>
+      <button onClick={onOpenWidgetPreview} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '10px', boxShadow: cardShadow }}>
         <LayoutGrid size={18} color={t.lavender} /> Anteprima widget
+      </button>
+      <button onClick={onOpenNews} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '20px', boxShadow: cardShadow }}>
+        <Bell size={18} color={t.sunny} /> Novità dell'app
+        {unreadNews > 0 && <span style={{ marginLeft: 'auto', background: t.coral, color: '#fff', borderRadius: '10px', padding: '2px 8px', fontSize: '11px', fontWeight: 800 }}>{unreadNews} da leggere</span>}
       </button>
 
       {/* Preferenze */}
@@ -1277,6 +1382,25 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
         <ToggleRow label="⚠️ Penalità per lavori dimenticati" value={penaltiesOn} onChange={togglePenalties} t={t} last />
       </div>
       {penaltiesOn && <div style={{ fontSize: '11px', color: t.textSoft, marginBottom: '20px', background: t.card, borderRadius: t.radiusSm, padding: '10px 12px' }}>Con le penalità attive, dimenticare a lungo i lavori chiave abbassa la "salute della casa" più velocemente.</div>}
+
+      {/* Suono del completamento */}
+      <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text, display: 'flex', alignItems: 'center', gap: '6px' }}><Music size={16} color={t.lavender} /> Suono quando segni un lavoro</div>
+      <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '10px' }}>Tocca per sentirlo. {soundOn ? 'Vale solo per questo telefono.' : 'I suoni sono spenti: riaccendili qui sopra per sentirli.'}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
+        {SOUND_PACKS.map((p) => {
+          const on = soundPack === p.id;
+          return (
+            <button key={p.id} onClick={() => { setSoundPack(p.id); playPackPreview(p.id); }} style={{ display: 'flex', alignItems: 'center', gap: '11px', background: t.card, border: `2px solid ${on ? t.lavender : 'transparent'}`, borderRadius: t.radiusSm, padding: '13px 14px', cursor: 'pointer', boxShadow: cardShadow, textAlign: 'left' }}>
+              <span style={{ fontSize: '22px' }}>{p.emoji}</span>
+              <span style={{ flex: 1 }}>
+                <span style={{ display: 'block', fontSize: '14px', fontWeight: 800, color: t.text }}>{p.name}</span>
+                <span style={{ display: 'block', fontSize: '11.5px', color: t.textSoft }}>{p.desc}</span>
+              </span>
+              {on && <Check size={18} color={t.lavender} />}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Dati */}
       <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Dati</div>
@@ -1328,7 +1452,7 @@ function EmojiPicker({ options, value, onChange, t }) {
   );
 }
 
-function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, t, categories, log, onRecurrence }) {
+function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, onLogSubtask, t, categories, log, onRecurrence }) {
   const [draft, setDraft] = useState(chore);
   useEffect(() => { setDraft(chore); }, [chore, editing]);
   const rec = log ? recurringStatus(chore, log) : null;
@@ -1382,23 +1506,38 @@ function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, t, categori
       </div>
     );
   }
+  const subtasks = chore.subtasks || [];
   return (
-    <div style={{ background: t.card, borderRadius: t.radiusSm, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: t.shadow }}>
-      <div style={{ fontSize: '24px' }}>{chore.emoji}</div>
-      <div style={{ flex: 1 }} onClick={onLog} role="button">
-        <div style={{ fontSize: '14px', fontWeight: 700, color: t.text, display: 'flex', alignItems: 'center', gap: '6px' }}>
-          {chore.name}
-          {rec && <Repeat size={12} color={t.textSoft} />}
+    <div style={{ background: t.card, borderRadius: t.radiusSm, padding: '12px 14px', boxShadow: t.shadow }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ fontSize: '24px' }}>{chore.emoji}</div>
+        <div style={{ flex: 1 }} onClick={onLog} role="button">
+          <div style={{ fontSize: '14px', fontWeight: 700, color: t.text, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {chore.name}
+            {rec && <Repeat size={12} color={t.textSoft} />}
+          </div>
+          <div style={{ fontSize: '12px', color: t.textSoft }}>
+            {chore.category} · {chore.points} punti
+            {rec && rec.status === 'overdue' && <span style={{ color: t.coral, fontWeight: 700 }}> · in ritardo</span>}
+            {rec && rec.status === 'due' && <span style={{ color: t.sunny, fontWeight: 700 }}> · da fare</span>}
+          </div>
         </div>
-        <div style={{ fontSize: '12px', color: t.textSoft }}>
-          {chore.category} · {chore.points} punti
-          {(chore.subtasks || []).length > 0 && <span style={{ color: t.lavender, fontWeight: 700 }}> · {chore.subtasks.length} sotto-task</span>}
-          {rec && rec.status === 'overdue' && <span style={{ color: t.coral, fontWeight: 700 }}> · in ritardo</span>}
-          {rec && rec.status === 'due' && <span style={{ color: t.sunny, fontWeight: 700 }}> · da fare</span>}
-        </div>
+        <button onClick={onEdit} style={{ background: t.line, border: 'none', borderRadius: '12px', padding: '11px', color: t.textSoft, cursor: 'pointer', display: 'flex', minHeight: '44px', alignItems: 'center' }}><Pencil size={17} /></button>
+        <button onClick={onLog} className="wiggle" style={{ background: t.sunny, border: 'none', borderRadius: t.radiusSm, padding: '11px 16px', fontWeight: 700, color: '#2D2A4A', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '14px', minHeight: '44px' }}><Check size={17} /> Fatto</button>
       </div>
-      <button onClick={onEdit} style={{ background: t.line, border: 'none', borderRadius: '12px', padding: '11px', color: t.textSoft, cursor: 'pointer', display: 'flex', minHeight: '44px', alignItems: 'center' }}><Pencil size={17} /></button>
-      <button onClick={onLog} className="wiggle" style={{ background: t.sunny, border: 'none', borderRadius: t.radiusSm, padding: '11px 16px', fontWeight: 700, color: '#2D2A4A', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '14px', minHeight: '44px' }}><Check size={17} /> Fatto</button>
+
+      {/* Sotto-task: si segnano da sole, senza passare dal lavoro principale */}
+      {subtasks.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${t.line}` }}>
+          {subtasks.map((sub) => (
+            <button key={sub.id} onClick={() => onLogSubtask(sub)} className="wiggle" style={{ background: 'transparent', border: `1.5px solid ${t.line}`, borderRadius: '20px', padding: '7px 12px', fontSize: '12.5px', fontWeight: 700, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <Check size={13} color={t.lavender} />
+              <span>{sub.emoji || chore.emoji} {sub.name}</span>
+              <span style={{ color: t.lavender, fontWeight: 800 }}>+{sub.points}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

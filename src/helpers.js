@@ -135,6 +135,56 @@ export const USER_COLORS = ['#FF6B6B', '#06D6A0', '#A78BFA', '#FFD166', '#4D96FF
 export const CHORE_EMOJIS = ['🍽️', '🫧', '🧹', '🪣', '🚿', '🛒', '🍳', '👕', '🧺', '🗑️', '🛏️', '🪶', '🪟', '❄️', '🛋️', '📑', '🪴', '🐾', '👔', '🌙', '✨', '🚗', '💻', '📦', '🧽', '🚽', '🪥', '🧴', '🍶', '🪒'];
 export const CATEGORIES = ['Cucina', 'Pulizia', 'Bucato', 'Gestione', 'Esterno'];
 
+/* ---------------------------- REGALI ---------------------------- */
+// I regali non c'entrano con i punti: sono richieste che uno fa all'altro
+// per un giorno preciso, e che l'altro può accettare o rifiutare.
+
+export const GIFT_EMOJIS = ['🎁', '💆', '🤗', '✈️', '🍽️', '☕', '🎬', '🛌', '🚗', '🍫', '🛁', '🌳', '🎶', '📵', '💐', '🧁', '🍿', '🕯️', '🧖', '🎟️', '🍸', '🎨', '📚', '🥐'];
+
+// Catalogo di partenza (i quattro chiesti da Kevin)
+export const DEFAULT_GIFTS = [
+  { id: 'g-massaggio', name: 'Massaggio di 20 minuti', emoji: '💆' },
+  { id: 'g-abbraccio', name: 'Abbraccio', emoji: '🤗' },
+  { id: 'g-barcellona', name: 'Vacanza a Barcellona', emoji: '✈️' },
+  { id: 'g-cena', name: 'Una cena per due', emoji: '🍽️' },
+];
+
+// Idee pronte da aggiungere con un tocco
+export const GIFT_SUGGESTIONS = [
+  { name: 'Colazione a letto', emoji: '🥐' },
+  { name: 'Serata film, scegli tu', emoji: '🎬' },
+  { name: "Dormi un'ora in più, penso io a tutto", emoji: '🛌' },
+  { name: 'Bagno caldo già pronto', emoji: '🛁' },
+  { name: 'Faccio io i tuoi lavori di oggi', emoji: '🧹' },
+  { name: 'Passeggiata al tramonto', emoji: '🌳' },
+  { name: 'Il tuo dolce preferito', emoji: '🍫' },
+  { name: 'Serata senza telefono, solo noi', emoji: '📵' },
+  { name: 'Ti porto io dove vuoi', emoji: '🚗' },
+  { name: 'Caffè portato a letto', emoji: '☕' },
+  { name: 'Un mazzo di fiori', emoji: '💐' },
+  { name: 'Cena a lume di candela in casa', emoji: '🕯️' },
+  { name: 'Ballo in cucina', emoji: '🎶' },
+  { name: 'Aperitivo fuori', emoji: '🍸' },
+  { name: 'Ti leggo un capitolo', emoji: '📚' },
+  { name: 'Giornata alle terme', emoji: '🧖' },
+];
+
+export const GIFT_STATUS = {
+  pending: { label: 'In attesa', emoji: '⏳' },
+  accepted: { label: 'Accettato', emoji: '💚' },
+  declined: { label: 'Rifiutato', emoji: '🙈' },
+  done: { label: 'Ricevuto', emoji: '🎉' },
+};
+
+// Etichetta amichevole per il giorno richiesto
+export function giftDayLabel(dateStr) {
+  const today = todayStr();
+  const tomorrow = todayStr(new Date(Date.now() + 86400000));
+  if (dateStr === today) return 'oggi';
+  if (dateStr === tomorrow) return 'domani';
+  return parseLocalDate(dateStr).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
 export const DEFAULT_CHORES = [
   { id: 'c1', name: 'Lavare i piatti', emoji: '🍽️', points: 10, category: 'Cucina' },
   { id: 'c2', name: 'Lavastoviglie (carico/scarico)', emoji: '🫧', points: 8, category: 'Cucina' },
@@ -616,7 +666,7 @@ export function cloneData(v) {
 }
 
 // Liste di oggetti e relativa chiave di identità
-const MERGE_LISTS = { log: 'id', chores: 'id', users: 'id', rewards: 'id', savedQuotes: 'text' };
+const MERGE_LISTS = { log: 'id', chores: 'id', users: 'id', rewards: 'id', savedQuotes: 'text', gifts: 'id', giftRequests: 'id' };
 // Mappe annidate (per utente, per data…)
 const MERGE_MAPS = ['excused', 'vacations'];
 
