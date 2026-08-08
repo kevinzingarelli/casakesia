@@ -3,9 +3,10 @@ import {
   Home, ListChecks, History, BarChart3, Settings, Plus, Minus, Flame, Trophy, Sparkles,
   Trash2, Check, Pencil, X, RotateCcw, Crown, Volume2, VolumeX, Moon, Sun, Download,
   Calendar, Heart, Target, AlertTriangle, Palmtree, Share2, LayoutGrid, Clock, Zap,
-  Search, Gift, Bell, Repeat, Bookmark, Sparkle as SparkleIcon, Star, Music,
+  Search, Gift, Bell, Repeat, Bookmark, Sparkle as SparkleIcon, Star, Music, Copy,
 } from 'lucide-react';
-import { supabase, TABLE, DATA_ROW_ID } from './supabaseClient';
+import { supabase, TABLE } from './supabaseClient';
+import { AuthScreen, HouseholdSetupScreen, SplashScreen } from './Auth';
 import {
   theme, USER_COLORS, CHORE_EMOJIS, CATEGORIES,
   DEFAULT_CHORES, DEFAULT_USERS, LEVELS, ACHIEVEMENTS,
@@ -65,7 +66,7 @@ function saveLS(key, val) { try { localStorage.setItem(key, JSON.stringify(val))
 // query string non cambia durante la vita della pagina.
 const isDemo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1';
 
-export default function App() {
+function App({ householdId, household, onSignOut }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('home');
@@ -230,7 +231,7 @@ export default function App() {
     try {
       const { error: err } = await supabase.from(TABLE)
         .update({ value: payload, updated_at: new Date().toISOString() })
-        .eq('id', DATA_ROW_ID);
+        .eq('id', householdId);
       if (err) throw err;
       ok = true;
     } catch (e) {
@@ -289,7 +290,7 @@ export default function App() {
     let channel;
     const load = async () => {
       try {
-        const { data: row, error: err } = await supabase.from(TABLE).select('value').eq('id', DATA_ROW_ID).single();
+        const { data: row, error: err } = await supabase.from(TABLE).select('value').eq('id', householdId).single();
         if (err) throw err;
         const raw = (!row?.value || Object.keys(row.value).length === 0) ? DEFAULT_DATA : row.value;
         const server = cloneData(raw);
@@ -340,7 +341,7 @@ export default function App() {
     load();
 
     channel = supabase.channel('household_data_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: TABLE, filter: `id=eq.${DATA_ROW_ID}` }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: TABLE, filter: `id=eq.${householdId}` }, (payload) => {
         const incoming = payload.new?.value;
         if (!incoming || !dataRef.current) return;
         if (sameData(incoming, dataRef.current)) {      // è l'eco del nostro stesso salvataggio
@@ -609,7 +610,7 @@ export default function App() {
   // Spedisce e, se il server segnala iscrizioni ormai morte, le ripulisce
   const notify = async (toUserId, title, message) => {
     if (isDemo) return; // niente chiamate di rete finte in demo
-    const res = await sendPush({ toUserId, title, message, url: '/', tag: 'regali' });
+    const res = await sendPush({ householdId, toUserId, title, message, url: '/', tag: 'regali' });
     if (res && res.failed && res.failed.length) {
       const dead = new Set(res.failed);
       save({
@@ -1435,6 +1436,7 @@ export default function App() {
           pushSub={pushSub} pushBusy={pushBusy} pushMsg={pushMsg}
           onEnablePush={enablePush} onDisablePush={disablePush}
           savedCount={(data.savedQuotes || []).length}
+          household={household} onSignOut={onSignOut}
         />
       )}
 
@@ -1503,12 +1505,39 @@ export default function App() {
 // COMPONENTI AUSILIARI
 // ============================================================
 
-function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, style, setStyle, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, renameCategory, removeCategory, choresUsingCategory, penaltiesOn, togglePenalties, vacations, setVacation, onOpenRewards, onOpenSavedQuotes, savedCount, onOpenWidgetPreview, soundPack, setSoundPack, onOpenNews, unreadNews, pushSub, pushBusy, pushMsg, onEnablePush, onDisablePush }) {
+function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, style, setStyle, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, renameCategory, removeCategory, choresUsingCategory, penaltiesOn, togglePenalties, vacations, setVacation, onOpenRewards, onOpenSavedQuotes, savedCount, onOpenWidgetPreview, soundPack, setSoundPack, onOpenNews, unreadNews, pushSub, pushBusy, pushMsg, onEnablePush, onDisablePush, household, onSignOut }) {
   const [newCat, setNewCat] = useState('');
+  const [codeCopied, setCodeCopied] = useState(false);
   const customCats = data.customCategories || [];
 
   return (
     <div className="fade-in" style={{ padding: '0 18px' }}>
+      {/* La tua casa: account e invito al partner */}
+      {household && (
+        <>
+          <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>La tua casa</div>
+          <div style={{ background: t.card, borderRadius: '18px', padding: '14px', boxShadow: cardShadow, marginBottom: '20px' }}>
+            {household.memberCount < 2 ? (
+              <>
+                <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '10px' }}>In attesa che il tuo partner si unisca. Condividi questo codice:</div>
+                <div
+                  onClick={() => { if (household.inviteCode) { navigator.clipboard?.writeText(household.inviteCode).then(() => { setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2000); }).catch(() => {}); } }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', background: t.bg, border: `1.5px dashed ${t.coral}`, borderRadius: '14px', padding: '12px', cursor: 'pointer', marginBottom: '12px' }}
+                >
+                  <div className="display" style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '4px', color: t.text }}>{household.inviteCode || '—'}</div>
+                  {codeCopied ? <Check size={16} color={t.mint} /> : <Copy size={16} color={t.textSoft} />}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '12px' }}>Voi due siete collegati alla stessa casa.</div>
+            )}
+            {onSignOut && (
+              <button onClick={() => { if (window.confirm('Uscire dal tuo account su questo telefono?')) onSignOut(); }} style={{ width: '100%', background: 'transparent', border: `1.5px solid ${t.line}`, borderRadius: '12px', padding: '10px', color: t.textSoft, fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>Esci dall'account</button>
+            )}
+          </div>
+        </>
+      )}
+
       {/* Identità */}
       <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>La tua identità su questo telefono</div>
       <div style={{ background: t.card, borderRadius: '18px', padding: '14px', boxShadow: cardShadow, marginBottom: '20px' }}>
@@ -2001,3 +2030,46 @@ function SavedQuotesModal({ saved, t, onRemove, onClose }) {
     </div>
   );
 }
+
+// ============================================================================
+// Guscio autenticazione: prima di mostrare l'app vera e propria, verifica
+// che ci sia una sessione e che l'account faccia già parte di una casa.
+// In modalità demo salta tutto questo (nessun account, dati finti).
+// ============================================================================
+function AppRoot() {
+  const [state, setState] = useState(() => (isDemo ? { status: 'demo' } : { status: 'loading' }));
+
+  useEffect(() => {
+    if (isDemo) return;
+    let alive = true;
+
+    const resolve = async (session) => {
+      if (!session) { if (alive) setState({ status: 'signed-out' }); return; }
+      const { data: membership } = await supabase.from('household_members').select('household_id').eq('user_id', session.user.id).maybeSingle();
+      if (!alive) return;
+      if (!membership) { setState({ status: 'no-household' }); return; }
+      const [{ data: hh }, { data: members }] = await Promise.all([
+        supabase.from('households').select('id, invite_code').eq('id', membership.household_id).single(),
+        supabase.from('household_members').select('user_id').eq('household_id', membership.household_id),
+      ]);
+      if (!alive) return;
+      setState({
+        status: 'ready',
+        householdId: membership.household_id,
+        household: { inviteCode: hh?.invite_code || null, memberCount: members?.length || 1 },
+      });
+    };
+
+    supabase.auth.getSession().then(({ data }) => resolve(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => resolve(session));
+    return () => { alive = false; sub.subscription.unsubscribe(); };
+  }, []);
+
+  if (state.status === 'demo') return <App householdId={null} household={null} onSignOut={null} />;
+  if (state.status === 'loading') return <SplashScreen />;
+  if (state.status === 'signed-out') return <AuthScreen />;
+  if (state.status === 'no-household') return <HouseholdSetupScreen />;
+  return <App householdId={state.householdId} household={state.household} onSignOut={() => supabase.auth.signOut()} />;
+}
+
+export default AppRoot;

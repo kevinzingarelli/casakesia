@@ -4,6 +4,8 @@
 // (in Safari come sito normale non esistono), e il permesso va chiesto da un
 // tocco dell'utente, non da solo all'avvio.
 
+import { supabase } from './supabaseClient';
+
 // Chiave pubblica VAPID: è pubblica per definizione, sta nel codice apposta.
 // La corrispondente chiave privata vive solo fra le variabili d'ambiente di
 // Vercel e non è mai scaricata dai telefoni.
@@ -112,13 +114,18 @@ export async function unsubscribeFromPush() {
 
 // Chiede al server di spedire una notifica all'altra persona.
 // Non blocca mai l'azione dell'utente: se fallisce, pazienza.
-export async function sendPush({ toUserId, title, message, url, tag }) {
-  if (!toUserId || !title) return { sent: 0, failed: [] };
+export async function sendPush({ householdId, toUserId, title, message, url, tag }) {
+  if (!householdId || !toUserId || !title) return { sent: 0, failed: [] };
   try {
+    // Il server legge le iscrizioni per conto nostro, con il NOSTRO token:
+    // così non gli serve una chiave da amministratore e resta comunque
+    // impossibile spedire notifiche a una casa che non è la nostra.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return { sent: 0, failed: [] };
     const res = await fetch('/api/notify', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ toUserId, title, message, url, tag }),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ householdId, toUserId, title, message, url, tag }),
     });
     if (!res.ok) return { sent: 0, failed: [] };
     return await res.json();

@@ -6,16 +6,22 @@
 // Richiede due variabili d'ambiente impostate su Vercel:
 //   VAPID_PUBLIC_KEY  · VAPID_PRIVATE_KEY
 //
-// Le iscrizioni dei due telefoni NON arrivano dal client: le rilegge da sé
-// da Supabase, così chi chiama non deve (e non può) maneggiare i dati di
-// iscrizione dell'altra persona.
+// NIENTE chiave di amministratore qui: da quando ogni casa ha la sua riga
+// protetta da RLS, questa funzione legge Supabase usando il token di chi
+// la chiama (che l'app allega alla richiesta). Chi chiama è già membro
+// della propria casa, quindi l'RLS gli lascia leggere quella riga e
+// nessun'altra — la stessa garanzia di prima, senza però che giri da
+// nessuna parte una chiave che scavalca tutti i permessi.
+//
+// Le iscrizioni dei due telefoni NON arrivano comunque dal client: le
+// rilegge da sé da Supabase, così chi chiama non deve (e non può)
+// maneggiare i dati di iscrizione dell'altra persona.
 
 import webpush from 'web-push';
 
 const SUPABASE_URL = 'https://qtocmomtqsazerqikjrc.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_H9m9tPwK7vC3116wU9SPKg_42ODMYul';
 const TABLE = 'household_data';
-const ROW_ID = 'main';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -34,19 +40,28 @@ export default async function handler(req, res) {
   if (typeof body === 'string') {
     try { body = JSON.parse(body); } catch { body = {}; }
   }
-  const { toUserId, title, message, url, tag } = body || {};
-  if (!toUserId || !title) {
-    return res.status(400).json({ error: 'Servono almeno toUserId e title' });
+  const { householdId, toUserId, title, message, url, tag } = body || {};
+  if (!householdId || !toUserId || !title) {
+    return res.status(400).json({ error: 'Servono almeno householdId, toUserId e title' });
   }
 
-  // Leggo le iscrizioni dal documento condiviso
+  // Il token di chi sta chiamando: è ciò che ci autorizza a leggere la sua
+  // casa e SOLO quella (ci pensa l'RLS). Senza, non si va avanti.
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Manca il token di accesso' });
+  }
+
+  // Leggo le iscrizioni dal documento della casa che ha chiamato
   let subs = [];
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?id=eq.${ROW_ID}&select=value`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?id=eq.${encodeURIComponent(householdId)}&select=value`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: auth },
     });
     if (!r.ok) throw new Error(`Supabase ha risposto ${r.status}`);
     const rows = await r.json();
+    // Nessuna riga = il chiamante non fa parte di quella casa (l'RLS gliela
+    // nasconde): non è un errore da spiegare, semplicemente non si spedisce.
     const value = rows && rows[0] && rows[0].value;
     subs = ((value && value.pushSubscriptions) || []).filter((s) => s.userId === toUserId);
   } catch (e) {

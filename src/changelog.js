@@ -7,9 +7,21 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '16';
+export const CURRENT_VERSION = '17';
 
 export const CHANGELOG = [
+  {
+    version: '17',
+    date: '2026-08-02',
+    time: '23:55',
+    title: 'Account personali e case separate',
+    items: [
+      'Ora si entra con la propria email e password. Prima chiunque avesse il link vedeva i vostri punti: adesso i dati sono vostri e basta',
+      'Ogni coppia ha la sua "casa" separata: chi si registra crea la casa e riceve un codice, l\'altra persona entra con quel codice. È il primo passo per poter dare l\'app anche ad altri',
+      'Il codice d\'invito resta sempre visibile in Opzioni → La tua casa, insieme al pulsante per uscire dall\'account',
+      'Le notifiche push continuano a funzionare come prima, ma ora il server controlla che tu faccia davvero parte della casa a cui stai scrivendo',
+    ],
+  },
   {
     version: '16',
     date: '2026-08-02',
