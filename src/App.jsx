@@ -225,10 +225,26 @@ function App({ householdId, household, onSignOut }) {
     if (flushing.current) return;                       // già in corso: si riprogramma da sé
     if (savedRev.current === rev.current) return;       // niente da salvare
     const sendingRev = rev.current;
-    const payload = dataRef.current;
+    let payload = dataRef.current;
     flushing.current = true;
     let ok = false;
     try {
+      // Prima di scrivere, si rilegge com'è ADESSO sul server. Se è cambiato
+      // rispetto all'ultima volta che l'abbiamo visto, si fondono le due
+      // versioni invece di sovrascrivere. Senza questo, una scheda rimasta
+      // aperta da prima (magari con una casa ancora vuota) al primo lavoro
+      // segnato spazzava via tutto lo storico di entrambi: è successo
+      // davvero il 09/08/2026 e ci sono voluti dei backup dai telefoni.
+      const { data: row, error: readErr } = await supabase.from(TABLE)
+        .select('value').eq('id', householdId).single();
+      if (readErr) throw readErr;
+      const remote = (row?.value && Object.keys(row.value).length) ? row.value : null;
+      if (remote && !sameData(remote, baseRef.current)) {
+        payload = mergeData(baseRef.current, dataRef.current, remote);
+        dataRef.current = payload;
+        setData(payload);
+      }
+
       const { error: err } = await supabase.from(TABLE)
         .update({ value: payload, updated_at: new Date().toISOString() })
         .eq('id', householdId);
