@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recupero dati — Casa Points</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background:#FFF7ED; color:#2D2A4A; margin:0; padding:20px; }
+  .card { background:#fff; border-radius:18px; padding:18px; margin-bottom:14px; box-shadow:0 4px 12px rgba(45,42,74,.06); }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:#6B6789; font-size:13px; margin-bottom:16px; }
+  .big { font-size:34px; font-weight:800; }
+  .ok { color:#06A578; } .ko { color:#D33; }
+  button { width:100%; border:none; border-radius:14px; padding:15px; font-size:16px; font-weight:700; color:#fff; background:#FF6B6B; margin-top:10px; }
+  button[disabled] { background:#bbb; }
+  pre { background:#F4F2F8; padding:10px; border-radius:10px; font-size:11px; overflow:auto; max-height:220px; white-space:pre-wrap; word-break:break-all; }
+</style>
+</head>
+<body>
+<h1>Recupero dati</h1>
+<div class="sub">Questa pagina NON avvia l'app: legge solo la copia di sicurezza salvata su questo telefono.</div>
+<div class="card" id="stato">Controllo in corso…</div>
+<div class="card" id="azione" style="display:none"></div>
+<div class="card"><div style="font-size:12px;color:#6B6789;margin-bottom:6px">Dettagli tecnici</div><pre id="log"></pre></div>
+
+<script>
+const REF = 'qtocmomtqsazerqikjrc';
+const URL_BASE = 'https://' + REF + '.supabase.co';
+const APIKEY = 'sb_publishable_H9m9tPwK7vC3116wU9SPKg_42ODMYul';
+const $ = (id) => document.getElementById(id);
+const logLines = [];
+const log = (m) => { logLines.push(m); $('log').textContent = logLines.join('\n'); };
+
+function leggi(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+log('chiavi presenti: ' + Object.keys(localStorage).join(', '));
+
+// 1) La copia di sicurezza dell'ultimo caricamento riuscito
+let snap = null, origine = null;
+const grezzo = leggi('casa-points-last-known');
+if (grezzo) { try { snap = JSON.parse(grezzo); origine = 'ultimo salvataggio noto'; } catch (e) { log('copia illeggibile: ' + e.message); } }
+
+// 2) Se manca, provo le modifiche rimaste in sospeso (contengono uno stato completo)
+if (!snap) {
+  const pend = leggi('casa-points-pending');
+  if (pend) {
+    try {
+      const j = JSON.parse(pend);
+      const cand = (j.local && (j.local.log || []).length) ? j.local : j.base;
+      if (cand) { snap = cand; origine = 'modifiche in sospeso'; }
+    } catch (e) { log('sospesi illeggibili: ' + e.message); }
+  }
+}
+
+const voci = snap && Array.isArray(snap.log) ? snap.log.length : 0;
+const nomi = snap && Array.isArray(snap.users) ? snap.users.map(u => u.name).join(' e ') : '—';
+
+if (!snap) {
+  $('stato').innerHTML = '<div class="big ko">Nessuna copia</div><div class="sub">Su questo telefono non c\'è una copia di sicurezza. Prova sull\'altro telefono, senza aprire l\'app.</div>';
+} else {
+  $('stato').innerHTML = '<div class="big ' + (voci > 50 ? 'ok' : 'ko') + '">' + voci + ' lavori</div>'
+    + '<div class="sub">Copia trovata (' + origine + ') — ' + nomi + '</div>';
+  log('origine copia: ' + origine + ' | voci: ' + voci + ' | utenti: ' + nomi);
+
+  if (voci > 50) {
+    $('azione').style.display = 'block';
+    $('azione').innerHTML = '<div style="font-size:14px;margin-bottom:4px"><b>Questa è la copia buona.</b></div>'
+      + '<div class="sub">Premi per rimetterla al suo posto.</div>'
+      + '<button id="btn">Ripristina questi ' + voci + ' lavori</button>';
+    $('btn').onclick = ripristina;
+  } else {
+    $('azione').style.display = 'block';
+    $('azione').innerHTML = '<div class="sub">Questa copia è già quella vuota: non serve. Prova sull\'altro telefono, senza aprire l\'app.</div>';
+  }
+}
+
+function sessione() {
+  const k = Object.keys(localStorage).find(x => /^sb-.*-auth-token$/.test(x));
+  if (!k) return null;
+  try {
+    const j = JSON.parse(localStorage.getItem(k));
+    return j && (j.access_token || (j.currentSession && j.currentSession.access_token)) || null;
+  } catch (e) { return null; }
+}
+
+async function ripristina() {
+  const btn = $('btn');
+  btn.disabled = true; btn.textContent = 'Ripristino in corso…';
+  try {
+    const tok = sessione();
+    if (!tok) { throw new Error('Non risulti collegato su questo telefono: apri l\'app, fai l\'accesso, poi TORNA SUBITO qui senza toccare altro.'); }
+
+    const r = await fetch(URL_BASE + '/rest/v1/household_data?select=id', {
+      headers: { apikey: APIKEY, Authorization: 'Bearer ' + tok }
+    });
+    const righe = await r.json();
+    if (!Array.isArray(righe) || !righe.length) throw new Error('Non trovo la tua casa (sessione scaduta?).');
+    const casa = righe[0].id;
+    log('casa trovata: ' + casa);
+
+    const w = await fetch(URL_BASE + '/rest/v1/household_data?id=eq.' + encodeURIComponent(casa), {
+      method: 'PATCH',
+      headers: { apikey: APIKEY, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({ value: snap, updated_at: new Date().toISOString() })
+    });
+    const res = await w.json();
+    if (!w.ok) throw new Error(JSON.stringify(res));
+    const tornate = res && res[0] && res[0].value && res[0].value.log ? res[0].value.log.length : 0;
+    log('scritte ' + tornate + ' voci');
+    $('azione').innerHTML = '<div class="big ok">Fatto</div><div class="sub">Rimessi ' + tornate + ' lavori. Ora puoi riaprire l\'app.</div>';
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Riprova';
+    log('ERRORE: ' + e.message);
+    alert('Non è riuscito: ' + e.message);
+  }
+}
+</script>
+</body>
+</html>
