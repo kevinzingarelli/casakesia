@@ -368,11 +368,16 @@ function App({ householdId, household, onSignOut }) {
         dataRef.current = value;
         loaded.current = true;
         setData(value);
+        // ATTENZIONE all'ordine: la copia precedente va letta PRIMA di
+        // sovrascriverla, altrimenti si perde proprio quella che servirebbe
+        // a recuperare. Vale anche come ripiego per i telefoni che non hanno
+        // ancora la copia "più completa" (introdotta solo il 09/08/2026).
+        const copiaPrecedente = loadLS(LS_LAST_KNOWN, null);
         saveLS(LS_LAST_KNOWN, server); // per poter aprire l'app anche offline, la prossima volta
         // Copia "più completa": si aggiorna solo se il server ha almeno
         // altrettanto storico, così un dato impoverito non la cancella.
         {
-          const best = loadLS(LS_BEST, null);
+          const best = loadLS(LS_BEST, null) || copiaPrecedente;
           const quanteOra = (server?.log || []).length;
           const quanteInCopia = (best?.log || []).length;
           if (quanteOra >= quanteInCopia) saveLS(LS_BEST, server);
