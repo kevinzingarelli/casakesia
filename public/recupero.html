@@ -83,6 +83,17 @@ function sessione() {
   } catch (e) { return null; }
 }
 
+// Unisce per id: parte dalla copia buona e ci aggiunge quello che nel
+// frattempo è finito sul server e lì non c'era (es. i lavori segnati da
+// Asia stamattina). Così non si perde niente da nessuna delle due parti.
+function unisciPerId(dallaCopia, dalServer) {
+  const a = Array.isArray(dallaCopia) ? dallaCopia : [];
+  const b = Array.isArray(dalServer) ? dalServer : [];
+  const visti = new Set(a.map((x) => x && x.id).filter(Boolean));
+  const aggiunti = b.filter((x) => x && x.id && !visti.has(x.id));
+  return { lista: a.concat(aggiunti), aggiunti: aggiunti.length };
+}
+
 async function ripristina() {
   const btn = $('btn');
   btn.disabled = true; btn.textContent = 'Ripristino in corso…';
@@ -90,24 +101,38 @@ async function ripristina() {
     const tok = sessione();
     if (!tok) { throw new Error('Non risulti collegato su questo telefono: apri l\'app, fai l\'accesso, poi TORNA SUBITO qui senza toccare altro.'); }
 
-    const r = await fetch(URL_BASE + '/rest/v1/household_data?select=id', {
+    const r = await fetch(URL_BASE + '/rest/v1/household_data?select=id,value', {
       headers: { apikey: APIKEY, Authorization: 'Bearer ' + tok }
     });
     const righe = await r.json();
     if (!Array.isArray(righe) || !righe.length) throw new Error('Non trovo la tua casa (sessione scaduta?).');
     const casa = righe[0].id;
-    log('casa trovata: ' + casa);
+    const attuale = righe[0].value || {};
+    log('casa trovata: ' + casa + ' | sul server ora: ' + ((attuale.log || []).length) + ' voci');
+
+    // Parto dalla copia buona e recupero il recuperabile da ciò che c'è ora
+    const unito = JSON.parse(JSON.stringify(snap));
+    const l = unisciPerId(unito.log, attuale.log);      unito.log = l.lista;
+    const c = unisciPerId(unito.chores, attuale.chores); unito.chores = c.lista;
+    const g = unisciPerId(unito.gifts, attuale.gifts);   unito.gifts = g.lista;
+    const q = unisciPerId(unito.giftRequests, attuale.giftRequests); unito.giftRequests = q.lista;
+    const w2 = unisciPerId(unito.rewards, attuale.rewards); unito.rewards = w2.lista;
+    unito.log.sort((x, y) => String(y.timestamp).localeCompare(String(x.timestamp)));
+    log('recuperati dal server: ' + l.aggiunti + ' lavori, ' + c.aggiunti + ' voci di catalogo');
+    log('totale dopo l\'unione: ' + unito.log.length + ' lavori');
+
+    if (unito.log.length < (snap.log || []).length) throw new Error('Controllo fallito: l\'unione ha meno voci della copia. Non scrivo nulla.');
 
     const w = await fetch(URL_BASE + '/rest/v1/household_data?id=eq.' + encodeURIComponent(casa), {
       method: 'PATCH',
       headers: { apikey: APIKEY, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-      body: JSON.stringify({ value: snap, updated_at: new Date().toISOString() })
+      body: JSON.stringify({ value: unito, updated_at: new Date().toISOString() })
     });
     const res = await w.json();
     if (!w.ok) throw new Error(JSON.stringify(res));
     const tornate = res && res[0] && res[0].value && res[0].value.log ? res[0].value.log.length : 0;
     log('scritte ' + tornate + ' voci');
-    $('azione').innerHTML = '<div class="big ok">Fatto</div><div class="sub">Rimessi ' + tornate + ' lavori. Ora puoi riaprire l\'app.</div>';
+    $('azione').innerHTML = '<div class="big ok">Fatto</div><div class="sub">Rimessi <b>' + tornate + '</b> lavori (compresi quelli segnati stamattina). Ora potete riaprire l\'app su tutti i telefoni.</div>';
   } catch (e) {
     btn.disabled = false; btn.textContent = 'Riprova';
     log('ERRORE: ' + e.message);
