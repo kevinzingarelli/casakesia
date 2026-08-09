@@ -373,15 +373,27 @@ function App({ householdId, household, onSignOut }) {
         // a recuperare. Vale anche come ripiego per i telefoni che non hanno
         // ancora la copia "più completa" (introdotta solo il 09/08/2026).
         const copiaPrecedente = loadLS(LS_LAST_KNOWN, null);
+        const sospesiSalvati = loadLS(LS_PENDING, null);
         saveLS(LS_LAST_KNOWN, server); // per poter aprire l'app anche offline, la prossima volta
         // Copia "più completa": si aggiorna solo se il server ha almeno
         // altrettanto storico, così un dato impoverito non la cancella.
+        // Si guarda in TUTTI i posti dove può essere rimasto uno stato
+        // completo e si tiene quello con più storico: la copia dedicata, la
+        // copia dell'ultimo caricamento, e le due metà delle modifiche
+        // rimaste in sospeso. Ogni posto è una possibilità in più di
+        // recuperare, e nessuno di questi viene mai rimpicciolito.
         {
-          const best = loadLS(LS_BEST, null) || copiaPrecedente;
+          const candidati = [
+            loadLS(LS_BEST, null),
+            copiaPrecedente,
+            sospesiSalvati?.local,
+            sospesiSalvati?.base,
+          ].filter((c) => c && Array.isArray(c.log) && Array.isArray(c.users));
+          const best = candidati.sort((a, b) => b.log.length - a.log.length)[0] || null;
           const quanteOra = (server?.log || []).length;
           const quanteInCopia = (best?.log || []).length;
-          if (quanteOra >= quanteInCopia) saveLS(LS_BEST, server);
-          else setRecuperabile({ copia: best, mancanti: quanteInCopia - quanteOra });
+          if (!best || quanteOra >= quanteInCopia) saveLS(LS_BEST, server);
+          else { saveLS(LS_BEST, best); setRecuperabile({ copia: best, mancanti: quanteInCopia - quanteOra }); }
         }
         if (dirty) { rev.current += 1; writePending(); scheduleFlush(SAVE_DEBOUNCE); }
         else clearPending();
