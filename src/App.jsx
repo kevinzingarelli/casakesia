@@ -50,6 +50,12 @@ const LS_STYLE = 'casa-points-style';
 const LS_SOUNDPACK = 'casa-points-soundpack';
 const LS_PENDING = 'casa-points-pending';   // modifiche non ancora arrivate sul server
 const LS_LAST_KNOWN = 'casa-points-last-known'; // ultima copia confermata dal server, per aprire l'app offline
+// Copia di sicurezza che NON può rimpicciolirsi: tiene sempre la versione con
+// più storico mai vista su questo telefono. Serve da rete di salvataggio se
+// qualcosa impoverisce i dati sul server (è successo il 09/08/2026): quella
+// normale qui sopra verrebbe sovrascritta col dato impoverito al primo
+// caricamento, questa no.
+const LS_BEST = 'casa-points-copia-piu-completa';
 
 const SAVE_DEBOUNCE = 250;   // ms di attesa prima di scrivere su Supabase
 const RETRY_MIN = 1000;      // primo tentativo dopo un errore di rete
@@ -99,6 +105,8 @@ function App({ householdId, household, onSignOut }) {
   const [undoToast, setUndoToast] = useState(null); // { ids, label } — lavoro appena segnato, ancora annullabile
   const undoTimerRef = useRef(null);
   const [editingEntry, setEditingEntry] = useState(null); // voce di storico in modifica
+  const [recuperabile, setRecuperabile] = useState(null); // { copia, mancanti } — storico sparito dal server ma ancora qui
+  const [recuperoInCorso, setRecuperoInCorso] = useState(false);
   const [soundPack, setSoundPack] = useState(() => loadLS(LS_SOUNDPACK, DEFAULT_PACK));
   const [showNews, setShowNews] = useState(false);
   const [unreadNews, refreshUnread] = useUnreadNews();
@@ -269,6 +277,41 @@ function App({ householdId, household, onSignOut }) {
     }
   };
 
+  // Rimette lo storico sparito, unendo la copia locale più completa a quello
+  // che c'è adesso sul server (così non si perde neanche ciò che è stato
+  // segnato nel frattempo). Non sovrascrive mai a scatola chiusa.
+  const recuperaStorico = () => {
+    if (!recuperabile?.copia || !dataRef.current) return;
+    setRecuperoInCorso(true);
+    const copia = recuperabile.copia;
+    const attuale = dataRef.current;
+    const unisci = (a, b) => {
+      const base = Array.isArray(a) ? a : [];
+      const extra = Array.isArray(b) ? b : [];
+      const visti = new Set(base.map((x) => x && x.id).filter(Boolean));
+      return base.concat(extra.filter((x) => x && x.id && !visti.has(x.id)));
+    };
+    const unito = {
+      ...copia,
+      log: unisci(copia.log, attuale.log).sort((x, y) => String(y.timestamp).localeCompare(String(x.timestamp))),
+      chores: unisci(copia.chores, attuale.chores),
+      gifts: unisci(copia.gifts, attuale.gifts),
+      giftRequests: unisci(copia.giftRequests, attuale.giftRequests),
+      rewards: unisci(copia.rewards, attuale.rewards),
+      pushSubscriptions: unisci(copia.pushSubscriptions, attuale.pushSubscriptions),
+    };
+    // Salvagente: se per qualsiasi motivo l'unione perdesse voci, non si scrive
+    if (unito.log.length < (copia.log || []).length || unito.log.length < (attuale.log || []).length) {
+      setRecuperoInCorso(false);
+      setError('Recupero annullato per sicurezza: il risultato aveva meno lavori di quelli attuali.');
+      return;
+    }
+    saveLS(LS_BEST, unito);
+    save(unito);
+    setRecuperabile(null);
+    setRecuperoInCorso(false);
+  };
+
   const scheduleFlush = (delay) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => { saveTimer.current = null; flush(); }, delay);
@@ -326,6 +369,15 @@ function App({ householdId, household, onSignOut }) {
         loaded.current = true;
         setData(value);
         saveLS(LS_LAST_KNOWN, server); // per poter aprire l'app anche offline, la prossima volta
+        // Copia "più completa": si aggiorna solo se il server ha almeno
+        // altrettanto storico, così un dato impoverito non la cancella.
+        {
+          const best = loadLS(LS_BEST, null);
+          const quanteOra = (server?.log || []).length;
+          const quanteInCopia = (best?.log || []).length;
+          if (quanteOra >= quanteInCopia) saveLS(LS_BEST, server);
+          else setRecuperabile({ copia: best, mancanti: quanteInCopia - quanteOra });
+        }
         if (dirty) { rev.current += 1; writePending(); scheduleFlush(SAVE_DEBOUNCE); }
         else clearPending();
       } catch (e) {
@@ -1069,6 +1121,31 @@ function App({ householdId, household, onSignOut }) {
         <div style={{ margin: '0 18px 12px', background: '#2D2A4A', color: '#fff', borderRadius: '14px', padding: '10px 14px', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
           <span>Modalità demo — dati finti, niente viene salvato</span>
           <a href="/" style={{ color: '#fff', textDecoration: 'underline', flexShrink: 0 }}>Esci</a>
+        </div>
+      )}
+
+      {/* Storico sparito dal server ma ancora presente su questo telefono */}
+      {recuperabile && (
+        <div className="slide-up" style={{ margin: '0 18px 12px', background: '#FFF3CD', border: '2px solid #FFC107', borderRadius: '16px', padding: '14px' }}>
+          <div style={{ fontSize: '14px', fontWeight: 800, color: '#7A5B00', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '7px' }}>
+            <AlertTriangle size={17} /> Mancano {recuperabile.mancanti} lavori
+          </div>
+          <div style={{ fontSize: '12.5px', color: '#7A5B00', marginBottom: '10px', lineHeight: 1.45 }}>
+            Su questo telefono c'è ancora una copia completa. Posso rimetterli a posto, tenendo anche quelli segnati nel frattempo.
+          </div>
+          <button
+            onClick={recuperaStorico}
+            disabled={recuperoInCorso}
+            style={{ width: '100%', background: recuperoInCorso ? '#bbb' : '#FFC107', border: 'none', borderRadius: '12px', padding: '12px', fontSize: '14px', fontWeight: 800, color: '#4A3800', cursor: recuperoInCorso ? 'default' : 'pointer' }}
+          >
+            {recuperoInCorso ? 'Ripristino…' : `Rimetti a posto i ${recuperabile.mancanti} lavori`}
+          </button>
+          <button
+            onClick={() => setRecuperabile(null)}
+            style={{ width: '100%', marginTop: '6px', background: 'transparent', border: 'none', color: '#7A5B00', fontSize: '12px', cursor: 'pointer' }}
+          >
+            No, va bene così
+          </button>
         </div>
       )}
 
