@@ -7,9 +7,19 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '18';
+export const CURRENT_VERSION = '19';
 
 export const CHANGELOG = [
+  {
+    version: '19',
+    date: '2026-08-13',
+    time: '18:05',
+    title: 'Corretti punti contati due volte',
+    items: [
+      'Le due voci di "riporto storico" create durante il recupero dei dati risultavano inserite due volte, quindi i punti venivano contati doppi: erano 1818 invece di 909 e 3186 invece di 1593. Ora i totali sono corretti',
+      'L\'app ora controlla a ogni salvataggio che non finiscano nello storico due voci identiche: se succede le scarta prima di scrivere, così un problema del genere non può ripetersi',
+    ],
+  },
   {
     version: '18',
     date: '2026-08-13',

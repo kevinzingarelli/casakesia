@@ -14,7 +14,7 @@ import {
   pointsForEntry, choreNameForEntry, achievementContext, uid, startOfWeek,
   houseHealth, motivationalMessage, currentSeason,
   houseState, recurringStatus, rewardAchieved, recentChores, groupByDay, computeWeekWins,
-  mergeData, sameData, cloneData, parseLocalDate, DEFAULT_GIFTS, giftDayLabel, giftRemaining,
+  mergeData, sameData, cloneData, dedupeData, parseLocalDate, DEFAULT_GIFTS, giftDayLabel, giftRemaining,
 } from './helpers';
 import { playCompletionSound, playAchievementSound, playLevelUpSound, vibrate, playPackPreview, SOUND_PACKS, DEFAULT_PACK } from './sounds';
 import { quoteOfTheDay } from './quotes';
@@ -250,6 +250,12 @@ function App({ householdId, household, onSignOut }) {
       const remote = (row?.value && Object.keys(row.value).length) ? row.value : null;
       if (remote && !sameData(remote, baseRef.current)) {
         payload = mergeData(baseRef.current, dataRef.current, remote);
+      }
+      // Ultimo controllo prima di scrivere: nessun id ripetuto, qualunque
+      // sia la strada da cui arriva (fusione, recupero, o dati già sporchi
+      // trovati sul server). Così un doppione non sopravvive a un salvataggio.
+      payload = dedupeData(payload);
+      if (payload !== dataRef.current) {
         dataRef.current = payload;
         setData(payload);
       }
@@ -318,7 +324,11 @@ function App({ householdId, household, onSignOut }) {
     saveTimer.current = setTimeout(() => { saveTimer.current = null; flush(); }, delay);
   };
 
-  const save = (next) => {
+  const save = (nextGrezzo) => {
+    // Rete di sicurezza su OGNI salvataggio: mai far passare due elementi con
+    // lo stesso id. Un doppione nello storico conta i punti due volte e non
+    // se ne accorge nessuno per giorni (successo il 13/08/2026).
+    const next = dedupeData(nextGrezzo);
     // Demo: si comporta come se avesse salvato, ma resta solo in memoria —
     // niente Supabase, niente localStorage, per non confondersi con una
     // sessione vera sullo stesso telefono.

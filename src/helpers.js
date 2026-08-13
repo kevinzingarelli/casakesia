@@ -789,6 +789,36 @@ function mergeMap(base, local, remote) {
  * scrive. Se lo stesso elemento è stato toccato da tutti e due, vince quello
  * locale: è l'azione che l'utente ha appena fatto e che vede sullo schermo.
  */
+/**
+ * Toglie gli elementi con id ripetuto dalle liste identificate (storico,
+ * lavori, regali…), tenendo la prima occorrenza. Si applica a OGNI
+ * salvataggio: un doppione non è mai voluto — significa che due punteggi,
+ * due lavori o due regali identici verrebbero contati due volte.
+ *
+ * Serve da rete di sicurezza indipendente da come il doppione è nato: il
+ * 13/08/2026 due voci di riporto punti sono finite due volte nello storico
+ * (1818 punti invece di 909) e nessuno se n'è accorto per giorni.
+ */
+export function dedupeData(d) {
+  if (!d || typeof d !== 'object') return d;
+  let cambiato = false;
+  const out = { ...d };
+  Object.entries(MERGE_LISTS).forEach(([campo, chiave]) => {
+    const lista = out[campo];
+    if (!Array.isArray(lista)) return;
+    const visti = new Set();
+    const pulita = lista.filter((it) => {
+      const k = it && it[chiave];
+      if (k == null) return true;              // senza chiave non si può giudicare: si tiene
+      if (visti.has(k)) return false;
+      visti.add(k);
+      return true;
+    });
+    if (pulita.length !== lista.length) { out[campo] = pulita; cambiato = true; }
+  });
+  return cambiato ? out : d;
+}
+
 export function mergeData(base, local, remote) {
   if (!base || !local || !remote) return remote || local || base || null;
   const out = {};
