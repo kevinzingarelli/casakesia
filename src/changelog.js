@@ -7,9 +7,21 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '17';
+export const CURRENT_VERSION = '18';
 
 export const CHANGELOG = [
+  {
+    version: '18',
+    date: '2026-08-13',
+    time: '17:29',
+    title: 'Meno voci in basso, più chiarezza in Home',
+    items: [
+      'In basso ora ci sono 5 voci invece di 7: Storico, Serie e Stats sono confluite in una sola sezione "Progressi", con un selettore in alto per passare dall\'una all\'altra',
+      'Nella Home, "Azioni rapide" (il gesto che usate più spesso) è più in alto, appena sotto i punteggi',
+      'La casetta che mostra la salute della casa occupa molto meno spazio: l\'informazione resta, ma non ruba più la scena',
+      'La citazione del giorno è scesa in fondo alla pagina ed è più piccola: è un tocco piacevole, non deve competere con quello che dovete fare',
+    ],
+  },
   {
     version: '17',
     date: '2026-08-02',

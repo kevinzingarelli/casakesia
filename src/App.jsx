@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 import {
-  Home, ListChecks, History, BarChart3, Settings, Plus, Minus, Flame, Trophy, Sparkles,
+  Home, ListChecks, BarChart3, Settings, Plus, Minus, Flame, Trophy, Sparkles,
   Trash2, Check, Pencil, X, RotateCcw, Crown, Volume2, VolumeX, Moon, Sun, Download,
   Calendar, Heart, Target, AlertTriangle, Palmtree, Share2, LayoutGrid, Clock, Zap,
   Search, Gift, Bell, Repeat, Bookmark, Sparkle as SparkleIcon, Star, Music, Copy,
@@ -86,6 +86,7 @@ function App({ householdId, household, onSignOut }) {
   const [historyFilter, setHistoryFilter] = useState('all');
   const [historyCat, setHistoryCat] = useState('all');
   const [historySearch, setHistorySearch] = useState('');
+  const [progressSection, setProgressSection] = useState('storico'); // 'storico' | 'serie' | 'stats' — dentro il tab unico Progressi
   const [newChore, setNewChore] = useState({ name: '', points: 10, emoji: '✨', category: 'Pulizia' });
   const [showAddChore, setShowAddChore] = useState(false);
   const [editingChoreId, setEditingChoreId] = useState(null);
@@ -1214,12 +1215,45 @@ function App({ householdId, household, onSignOut }) {
                     {onVacation ? (
                       <div style={{ fontSize: '12px', marginTop: '6px', color: t.textSoft, display: 'flex', alignItems: 'center', gap: '4px' }}><Palmtree size={14} color={t.mint} /> in pausa</div>
                     ) : streaks[u.id] > 0 && (
-                      <button onClick={() => setTab('streak')} style={{ fontSize: '12px', marginTop: '6px', color: t.textSoft, display: 'flex', alignItems: 'center', gap: '4px', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}><Flame size={14} color={t.coral} /> {streaks[u.id]} {streaks[u.id] === 1 ? 'giorno' : 'giorni'}</button>
+                      <button onClick={() => { setTab('progress'); setProgressSection('serie'); }} style={{ fontSize: '12px', marginTop: '6px', color: t.textSoft, display: 'flex', alignItems: 'center', gap: '4px', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}><Flame size={14} color={t.coral} /> {streaks[u.id]} {streaks[u.id] === 1 ? 'giorno' : 'giorni'}</button>
                     )}
                   </div>
                 );
               })}
             </div>
+          </div>
+
+          {/* Lavori in scadenza (ricorrenti) — la cosa più urgente, subito sotto ai punti */}
+          {dueChores.length > 0 && (
+            <div className="slide-up" style={{ background: t.card, borderRadius: t.radius, padding: '14px', marginBottom: '16px', boxShadow: cardShadow, borderLeft: `4px solid ${t.sunny}` }}>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}><Bell size={16} color={t.sunny} /> Da fare presto</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {dueChores.slice(0, 4).map(({ chore, rec }) => (
+                  <div key={chore.id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <IconTile emoji={chore.emoji} size={36} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{chore.name}</div>
+                      <div style={{ fontSize: '11px', color: rec.status === 'overdue' ? t.coral : t.textSoft, fontWeight: 700 }}>
+                        {rec.status === 'overdue' ? `In ritardo di ${Math.abs(rec.daysLeft)} ${Math.abs(rec.daysLeft) === 1 ? 'giorno' : 'giorni'}` : rec.daysLeft === 0 ? 'Da fare oggi' : 'Da fare domani'}
+                      </div>
+                    </div>
+                    <button onClick={() => handleChoreClick(chore)} className="wiggle" style={{ background: t.sunny, border: 'none', borderRadius: t.radiusSm, padding: '11px 16px', fontWeight: 700, color: '#2D2A4A', cursor: 'pointer', fontSize: '14px', minHeight: '44px' }}>Fatto</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Azioni rapide — l'azione più usata dell'app, va vista subito */}
+          <SectionTitle icon={Zap} gradient="orange" t={t}>Azioni rapide</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '18px' }}>
+            {data.chores.slice(0, 6).map((c, i) => (
+              <button key={c.id} onClick={() => handleChoreClick(c)} className="quick-card slide-up" style={{ background: t.card, border: 'none', borderRadius: '18px', padding: '14px', textAlign: 'left', boxShadow: cardShadow, cursor: 'pointer', animationDelay: `${i * 0.04}s` }}>
+                <IconTile emoji={c.emoji} size={40} />
+                <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px', lineHeight: 1.2, color: t.text }}>{c.name}</div>
+                <div style={{ fontSize: '12px', color: '#D49A00', fontWeight: 700, marginTop: '2px' }}>+{c.points} pt</div>
+              </button>
+            ))}
           </div>
 
           {/* Obiettivo di coppia */}
@@ -1244,39 +1278,16 @@ function App({ householdId, household, onSignOut }) {
             </button>
           )}
 
-          {/* Casetta illustrata — salute della casa */}
-          <div className="slide-up" style={{ background: t.card, borderRadius: t.radius, padding: '18px', marginBottom: '16px', boxShadow: cardShadow, display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <HouseSvg score={health.score} t={t} size={104} />
+          {/* Casa — da illustrazione grande a riga snella: è ambiente, non deve competere con l'azione */}
+          <div className="slide-up" style={{ background: t.card, borderRadius: t.radiusSm, padding: '12px 14px', marginBottom: '16px', boxShadow: cardShadow, display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <HouseSvg score={health.score} t={t} size={40} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '11px', fontWeight: 800, color: t.textSoft, textTransform: 'uppercase', letterSpacing: '0.04em' }}>La casa è</div>
-              <div className="display" style={{ fontSize: '20px', fontWeight: 800, color: t.text, textTransform: 'capitalize' }}>{hState.label}</div>
-              <div style={{ height: '8px', background: t.line, borderRadius: '6px', overflow: 'hidden', marginTop: '10px' }}>
-                <div style={{ height: '100%', width: `${health.score}%`, background: health.color, borderRadius: '6px', transition: 'width 0.6s' }} />
+              <div style={{ fontSize: '13px', fontWeight: 800, color: t.text }}>La casa è <span style={{ textTransform: 'capitalize' }}>{hState.label}</span></div>
+              <div style={{ height: '6px', background: t.line, borderRadius: '4px', overflow: 'hidden', marginTop: '6px' }}>
+                <div style={{ height: '100%', width: `${health.score}%`, background: health.color, borderRadius: '4px', transition: 'width 0.6s' }} />
               </div>
-              <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '6px' }}>{hState.sparkle ? 'Perfetta! Continuate così' : health.score < 35 ? 'Un paio di lavori e migliora subito' : 'Si mantiene bene'}</div>
             </div>
           </div>
-
-          {/* Lavori in scadenza (ricorrenti) */}
-          {dueChores.length > 0 && (
-            <div className="slide-up" style={{ background: t.card, borderRadius: t.radius, padding: '14px', marginBottom: '16px', boxShadow: cardShadow, borderLeft: `4px solid ${t.sunny}` }}>
-              <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}><Bell size={16} color={t.sunny} /> Da fare presto</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {dueChores.slice(0, 4).map(({ chore, rec }) => (
-                  <div key={chore.id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <IconTile emoji={chore.emoji} size={36} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{chore.name}</div>
-                      <div style={{ fontSize: '11px', color: rec.status === 'overdue' ? t.coral : t.textSoft, fontWeight: 700 }}>
-                        {rec.status === 'overdue' ? `In ritardo di ${Math.abs(rec.daysLeft)} ${Math.abs(rec.daysLeft) === 1 ? 'giorno' : 'giorni'}` : rec.daysLeft === 0 ? 'Da fare oggi' : 'Da fare domani'}
-                      </div>
-                    </div>
-                    <button onClick={() => handleChoreClick(chore)} className="wiggle" style={{ background: t.sunny, border: 'none', borderRadius: t.radiusSm, padding: '11px 16px', fontWeight: 700, color: '#2D2A4A', cursor: 'pointer', fontSize: '14px', minHeight: '44px' }}>Fatto</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Ricompense */}
           {(rewards.length > 0 || unclaimedAchievedRewards.length > 0) && (
@@ -1293,34 +1304,20 @@ function App({ householdId, household, onSignOut }) {
             </button>
           )}
 
-          {/* Citazione del giorno (salvabile) */}
-          <div className="slide-up" style={{ background: t.style === 'minimal' ? (dark ? 'rgba(167,139,250,0.1)' : '#FFFFFF') : (dark ? 'rgba(167,139,250,0.12)' : '#F5F0FF'), borderRadius: t.radius, padding: '14px 16px', marginBottom: '16px', borderLeft: `4px solid ${t.lavender}`, boxShadow: t.style === 'minimal' ? cardShadow : 'none', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '14px', fontStyle: 'italic', color: t.text, lineHeight: 1.5 }}>"{quote.text}"</div>
-              <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '6px', fontWeight: 700 }}>— {quote.author}{quote.source ? `, ${quote.source}` : ''}</div>
-            </div>
-            <button onClick={() => toggleSaveQuote(quote)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: quoteSaved ? t.coral : t.textSoft, flexShrink: 0, padding: '2px' }} title={quoteSaved ? 'Salvata' : 'Salva citazione'}>
-              <Bookmark size={20} fill={quoteSaved ? t.coral : 'none'} />
-            </button>
-          </div>
-
-          {/* Messaggio motivazionale */}
+          {/* Messaggio motivazionale + citazione — contenuto d'atmosfera, in fondo e più discreto */}
           {motivation && (
-            <div className="slide-up" style={{ background: t.card, borderRadius: t.radiusSm, padding: '12px 14px', marginBottom: '16px', fontSize: '13px', color: t.text, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: cardShadow }}>
-              <Sparkles size={16} color={t.sunny} /> {motivation}
+            <div className="slide-up" style={{ background: t.card, borderRadius: t.radiusSm, padding: '10px 14px', marginBottom: '10px', fontSize: '12.5px', color: t.textSoft, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: cardShadow }}>
+              <Sparkles size={14} color={t.sunny} /> {motivation}
             </div>
           )}
-
-          {/* Azioni rapide */}
-          <SectionTitle icon={Zap} gradient="orange" t={t}>Azioni rapide</SectionTitle>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '18px' }}>
-            {data.chores.slice(0, 6).map((c, i) => (
-              <button key={c.id} onClick={() => handleChoreClick(c)} className="quick-card slide-up" style={{ background: t.card, border: 'none', borderRadius: '18px', padding: '14px', textAlign: 'left', boxShadow: cardShadow, cursor: 'pointer', animationDelay: `${i * 0.04}s` }}>
-                <IconTile emoji={c.emoji} size={40} />
-                <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px', lineHeight: 1.2, color: t.text }}>{c.name}</div>
-                <div style={{ fontSize: '12px', color: '#D49A00', fontWeight: 700, marginTop: '2px' }}>+{c.points} pt</div>
-              </button>
-            ))}
+          <div className="slide-up" style={{ background: t.style === 'minimal' ? (dark ? 'rgba(167,139,250,0.1)' : '#FFFFFF') : (dark ? 'rgba(167,139,250,0.1)' : '#F8F5FF'), borderRadius: t.radiusSm, padding: '12px 14px', marginBottom: '18px', borderLeft: `3px solid ${t.lavender}`, boxShadow: t.style === 'minimal' ? cardShadow : 'none', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '12.5px', fontStyle: 'italic', color: t.textSoft, lineHeight: 1.45 }}>"{quote.text}"</div>
+              <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '4px', fontWeight: 700, opacity: 0.8 }}>— {quote.author}{quote.source ? `, ${quote.source}` : ''}</div>
+            </div>
+            <button onClick={() => toggleSaveQuote(quote)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: quoteSaved ? t.coral : t.textSoft, flexShrink: 0, padding: '2px' }} title={quoteSaved ? 'Salvata' : 'Salva citazione'}>
+              <Bookmark size={17} fill={quoteSaved ? t.coral : 'none'} />
+            </button>
           </div>
 
           {/* Ultime attività */}
@@ -1356,17 +1353,6 @@ function App({ householdId, household, onSignOut }) {
             <WidgetScreen data={data} choresById={choresById} totals={totals} streaks={streaks} me={me} t={t} dark={dark} health={health} />
           </Suspense>
         </div>
-      )}
-
-      {/* ===== SERIE ===== */}
-      {tab === 'streak' && (
-        <StreakView
-          data={data}
-          me={me}
-          t={t}
-          onExcuse={excuseDay}
-          onUnexcuse={unexcuseDay}
-        />
       )}
 
       {/* ===== LAVORI ===== */}
@@ -1445,9 +1431,34 @@ function App({ householdId, household, onSignOut }) {
         </div>
       )}
 
-      {/* ===== STORICO ===== */}
-      {tab === 'history' && (
-        <div className="fade-in" style={{ padding: '0 18px' }}>
+      {/* ===== PROGRESSI (Storico + Serie + Stats, un unico tab con selettore) ===== */}
+      {tab === 'progress' && (
+        <div className="fade-in">
+          <div style={{ padding: '0 18px', marginBottom: '14px', display: 'flex', gap: '6px', background: t.card, borderRadius: '14px', boxShadow: cardShadow, margin: '0 18px 14px' }}>
+            {[
+              { id: 'storico', label: 'Storico' },
+              { id: 'serie', label: 'Serie' },
+              { id: 'stats', label: 'Stats' },
+            ].map((s) => {
+              const active = progressSection === s.id;
+              return (
+                <button key={s.id} onClick={() => setProgressSection(s.id)} style={{ flex: 1, padding: '10px 0', borderRadius: '11px', border: 'none', fontWeight: 800, fontSize: '13px', cursor: 'pointer', background: active ? t.coral : 'transparent', color: active ? '#fff' : t.textSoft, transition: 'background 0.15s, color 0.15s' }}>{s.label}</button>
+              );
+            })}
+          </div>
+
+          {progressSection === 'serie' && (
+            <StreakView data={data} me={me} t={t} onExcuse={excuseDay} onUnexcuse={unexcuseDay} />
+          )}
+
+          {progressSection === 'stats' && (
+            <Suspense fallback={<LazyFallback t={t} />}>
+              <StatsView data={data} choresById={choresById} t={t} dark={dark} />
+            </Suspense>
+          )}
+
+          {progressSection === 'storico' && (
+        <div style={{ padding: '0 18px' }}>
           <div style={{ position: 'relative', marginBottom: '10px' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.textSoft} strokeWidth="2" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <input placeholder="Cerca un lavoro..." value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} style={{ width: '100%', padding: '10px 10px 10px 36px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px' }} />
@@ -1512,6 +1523,8 @@ function App({ householdId, household, onSignOut }) {
             })()}
           </div>
         </div>
+          )}
+        </div>
       )}
 
       {/* ===== REGALI ===== */}
@@ -1521,13 +1534,6 @@ function App({ householdId, household, onSignOut }) {
           onAddGift={addGift} onEditGift={editGift} onRemoveGift={removeGift} onRequestGift={requestGift}
           onRespondGift={respondGift} onGiftDone={giftDone} onDeleteRequest={deleteGiftRequest}
         />
-      )}
-
-      {/* ===== STATS ===== */}
-      {tab === 'stats' && (
-        <Suspense fallback={<LazyFallback t={t} />}>
-          <StatsView data={data} choresById={choresById} t={t} dark={dark} />
-        </Suspense>
       )}
 
       {/* ===== IMPOSTAZIONI ===== */}
@@ -1591,9 +1597,7 @@ function App({ householdId, household, onSignOut }) {
           { id: 'home', icon: Home, label: 'Home' },
           { id: 'chores', icon: ListChecks, label: 'Lavori' },
           { id: 'gifts', icon: Gift, label: 'Regali' },
-          { id: 'history', icon: History, label: 'Storico' },
-          { id: 'streak', icon: Flame, label: 'Serie' },
-          { id: 'stats', icon: BarChart3, label: 'Stats' },
+          { id: 'progress', icon: BarChart3, label: 'Progressi' },
           { id: 'settings', icon: Settings, label: 'Opzioni' },
         ].map((it) => {
           const Icon = it.icon; const active = tab === it.id;
