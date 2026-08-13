@@ -96,7 +96,7 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,74,0.5)', zIndex: 60, display: 'flex', alignItems: 'flex-end' }} onClick={() => setSelectedDay(null)}>
           <div className="pop-card" style={{ background: t.card, width: '100%', borderRadius: '28px 28px 0 0', padding: '24px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <div className="display" style={{ fontSize: '18px', fontWeight: 800, color: t.text }}>
+              <div className="display" style={{ fontSize: '17px', fontWeight: 800, color: t.text }}>
                 {selectedDay.status === 'missed' ? 'Giorno saltato' : selectedDay.status === 'excused' ? 'Giorno giustificato' : 'Giorno'}
               </div>
               <button onClick={() => setSelectedDay(null)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><X size={22} /></button>
@@ -121,7 +121,7 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
                   value={customNote}
                   onChange={(e) => setCustomNote(e.target.value)}
                   placeholder="Es. Weekend fuori città..."
-                  style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '14px', background: t.card, color: t.text }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '14px', background: t.card, color: t.text }}
                 />
                 <div style={{ display: 'flex', gap: '8px' }}>
                   {selectedDay.status === 'excused' && (
@@ -174,7 +174,7 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {[['done', 'Fatto'], ['excused', 'Giustificato'], ['missed', 'Saltato'], ['open', 'Oggi']].map(([s, label]) => (
           <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: t.textSoft, fontWeight: 700 }}>
-            <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: statusColor(s) }} />
+            <div style={{ width: '10px', height: '10px', borderRadius: '4px', background: statusColor(s) }} />
             {label}
           </div>
         ))}
@@ -193,10 +193,10 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
           <div key={user.id} style={{ ...cardStyle }}>
             {/* Header utente */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-              <div style={{ fontSize: '28px' }}>{user.emoji}</div>
+              <div style={{ fontSize: '26px' }}>{user.emoji}</div>
               <div style={{ flex: 1 }}>
-                <div className="display" style={{ fontSize: '16px', fontWeight: 800, color: t.text }}>
-                  {user.name} {isMine && <span style={{ fontSize: '11px', background: user.color, color: '#fff', borderRadius: '6px', padding: '2px 6px', marginLeft: '4px' }}>tu</span>}
+                <div className="display" style={{ fontSize: '15px', fontWeight: 800, color: t.text }}>
+                  {user.name} {isMine && <span style={{ fontSize: '11px', background: user.color, color: '#fff', borderRadius: '8px', padding: '2px 6px', marginLeft: '4px' }}>tu</span>}
                 </div>
                 <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '2px' }}>
                   {done} fatti · {excusedCount} giustificati · {missed} saltati
@@ -205,7 +205,7 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
               <div style={{ textAlign: 'right' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
                   <Flame size={18} color={streak > 0 ? t.coral : t.textSoft} />
-                  <span className="display" style={{ fontSize: '24px', fontWeight: 800, color: streak > 0 ? t.coral : t.textSoft }}>{streak}</span>
+                  <span className="display" style={{ fontSize: '22px', fontWeight: 800, color: streak > 0 ? t.coral : t.textSoft }}>{streak}</span>
                 </div>
                 <div style={{ fontSize: '10px', color: t.textSoft }}>Best: {best}</div>
               </div>
@@ -233,7 +233,7 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
                         title={`${day.date}${day.status === 'excused' && day.reason ? ' · ' + REASONS.find((r) => r.id === day.reason)?.short : ''}`}
                         style={{
                           aspectRatio: '1',
-                          borderRadius: '6px',
+                          borderRadius: '8px',
                           border: isToday ? `2px solid ${user.color}` : 'none',
                           background: statusColor(day.status),
                           opacity: day.status === 'future' ? 0.2 : 1,
@@ -241,7 +241,7 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: '9px',
+                          fontSize: '10px',
                           padding: 0,
                           transition: 'transform 0.1s',
                           transform: canTap ? undefined : undefined,
@@ -251,7 +251,7 @@ export default function StreakView({ data, me, t, onExcuse, onUnexcuse }) {
                       >
                         {day.status === 'excused' && <Shield size={8} color="#fff" />}
                         {day.status === 'done' && day.count > 1 && (
-                          <span style={{ fontSize: '8px', color: '#fff', fontWeight: 800, lineHeight: 1 }}>{day.count}</span>
+                          <span style={{ fontSize: '10px', color: '#fff', fontWeight: 800, lineHeight: 1 }}>{day.count}</span>
                         )}
                       </button>
                     );

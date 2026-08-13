@@ -18,8 +18,8 @@ export default class ErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '24px', fontFamily: 'sans-serif', textAlign: 'center', background: '#FFF9F0' }}>
-          <div style={{ fontSize: '40px' }}>😬</div>
-          <div style={{ fontSize: '16px', fontWeight: 700, color: '#2D2A4A' }}>Qualcosa è andato storto.</div>
+          <div style={{ fontSize: '34px' }}>😬</div>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#2D2A4A' }}>Qualcosa è andato storto.</div>
           <div style={{ fontSize: '13px', color: '#6B6789' }}>I tuoi dati sono al sicuro sul server. Prova a ricaricare.</div>
           <button onClick={() => window.location.reload()} style={{ background: '#FF6B6B', border: 'none', color: '#fff', borderRadius: '12px', padding: '12px 24px', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}>Ricarica</button>
         </div>

@@ -7,9 +7,20 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '19';
+export const CURRENT_VERSION = '20';
 
 export const CHANGELOG = [
+  {
+    version: '20',
+    date: '2026-08-13',
+    time: '18:40',
+    title: 'Aspetto più ordinato e coerente',
+    items: [
+      'Testi e angoli arrotondati ora seguono una scala fissa: prima l\'app usava 21 dimensioni di testo e 16 raggi diversi scelti a occhio, ed è questo che la faceva sembrare disordinata anche quando ogni singolo pezzo era curato',
+      'I titoli delle sezioni sono più discreti: il colore pieno resta alle tessere dei lavori, che sono il contenuto vero. Prima competevano fra loro e non risaltava nulla',
+      'Nessuna funzione è cambiata: è solo questione di ordine visivo',
+    ],
+  },
   {
     version: '19',
     date: '2026-08-13',

@@ -26,6 +26,33 @@ export const PALETTE_MIN = {
   line: '#E5E5EA', lineDark: '#38383A',
 };
 
+/* ------------------------------------------------------------------ *
+ *  Scala del sistema visivo.
+ *
+ *  Prima esistevano 21 dimensioni di testo e 16 raggi d'angolo diversi,
+ *  scelti a occhio uno per uno: è la ragione principale per cui l'app
+ *  sembrava disordinata anche quando ogni singolo pezzo era curato.
+ *  Qui c'è l'elenco chiuso dei valori ammessi — usare SEMPRE questi.
+ * ------------------------------------------------------------------ */
+
+// Testo: ogni voce ha un mestiere, non è solo un numero
+export const FS = {
+  micro: '10px',   // etichette minuscole (badge, contatori)
+  small: '11px',   // testo di servizio, didascalie
+  body: '13px',    // testo normale: la maggior parte dell'interfaccia
+  strong: '14px',  // voci di elenco che devono risaltare
+  title: '15px',   // titoli di sezione
+  head: '17px',    // intestazioni di scheda
+  display: '22px', // numeri e titoli grandi
+  hero: '30px',    // il punteggio, l'unico numero davvero grande
+};
+
+// Spazi: multipli di 4, così il ritmo verticale resta regolare
+export const SP = { xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '24px' };
+
+// Angoli: 4 gradini invece di 16
+export const RADII = { pill: '999px', sm: '8px', md: '12px', lg: '18px', xl: '24px' };
+
 // Tema: dark (true/false) + style ('pop' | 'minimal')
 export function theme(dark, style = 'pop') {
   const minimal = style === 'minimal';
@@ -41,7 +68,8 @@ export function theme(dark, style = 'pop') {
       font: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif",
       fontDisplay: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif",
       displayWeight: 600,
-      radius: '18px', radiusSm: '12px', radiusLg: '22px',
+      radius: RADII.lg, radiusSm: RADII.md, radiusLg: RADII.xl,
+      fs: FS, sp: SP, r: RADII,
       shadow: dark ? '0 1px 3px rgba(0,0,0,0.6)' : '0 1px 2px rgba(0,0,0,0.04), 0 6px 20px rgba(0,0,0,0.05)',
       blur: 'saturate(180%) blur(20px)',
       navBg: dark ? 'rgba(28,28,30,0.78)' : 'rgba(255,255,255,0.78)',
@@ -58,7 +86,8 @@ export function theme(dark, style = 'pop') {
     font: "'Nunito', sans-serif",
     fontDisplay: "'Fredoka', sans-serif",
     displayWeight: 700,
-    radius: '24px', radiusSm: '16px', radiusLg: '28px',
+    radius: RADII.xl, radiusSm: RADII.lg, radiusLg: RADII.xl,
+    fs: FS, sp: SP, r: RADII,
     shadow: dark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(45,42,74,0.05)',
     blur: 'none',
     navBg: dark ? PALETTE.cardDark : PALETTE.card,

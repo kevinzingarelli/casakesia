@@ -19,7 +19,7 @@ function PeriodSelector({ period, setPeriod, customDays, setCustomDays, t, optio
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
         {keys.map((p) => (
           <button key={p} onClick={() => setPeriod(p)} style={{
-            padding: '6px 12px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+            padding: '6px 12px', borderRadius: '12px', border: 'none', cursor: 'pointer',
             fontSize: '12px', fontWeight: 700,
             background: period === p ? t.coral : (t.card === '#FFFFFF' ? '#FFF0E6' : 'rgba(255,255,255,0.06)'),
             color: period === p ? '#fff' : t.textSoft,
@@ -220,12 +220,12 @@ export default function StatsView({ data, choresById, t, dark }) {
       {/* Modal info traguardo */}
       {achievementInfo && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,74,0.45)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }} onClick={() => setAchievementInfo(null)}>
-          <div className="pop-card" style={{ background: t.card, borderRadius: '24px', padding: '24px', maxWidth: '320px', textAlign: 'center', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+          <div className="pop-card" style={{ background: t.card, borderRadius: '20px', padding: '24px', maxWidth: '320px', textAlign: 'center', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setAchievementInfo(null)} style={{ position: 'absolute', top: '12px', right: '12px', background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><X size={20} /></button>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}><BadgeIcon id={achievementInfo.id} kind={String(achievementInfo.id).startsWith('cm_') ? 'milestone' : 'achievement'} unlocked={achievementInfo.unlocked} size={64} fallbackEmoji={achievementInfo.emoji} /></div>
             <div className="display" style={{ fontSize: '20px', fontWeight: 700, color: t.text }}>{achievementInfo.title}</div>
             <div style={{ fontSize: '13px', color: achievementInfo.unlocked ? t.mint : t.textSoft, marginTop: '4px', fontWeight: 700 }}>{achievementInfo.unlocked ? 'SBLOCCATO ✓' : 'DA SBLOCCARE'}</div>
-            <div style={{ fontSize: '14px', color: t.text, marginTop: '14px', lineHeight: 1.5, background: dark ? 'rgba(255,255,255,0.05)' : '#FFF7ED', borderRadius: '14px', padding: '12px' }}>
+            <div style={{ fontSize: '14px', color: t.text, marginTop: '14px', lineHeight: 1.5, background: dark ? 'rgba(255,255,255,0.05)' : '#FFF7ED', borderRadius: '16px', padding: '12px' }}>
               <strong>Come ottenerlo:</strong><br />{achievementInfo.how || achievementInfo.desc}
             </div>
           </div>
@@ -237,15 +237,15 @@ export default function StatsView({ data, choresById, t, dark }) {
       <div style={{ ...cardStyle, background: `linear-gradient(135deg, ${t.lavender}22, ${t.mint}22)` }}>
         <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', marginBottom: '12px' }}>
           <div>
-            <div className="display" style={{ fontSize: '28px', fontWeight: 800, color: t.text }}>{couple.totalJobs}</div>
+            <div className="display" style={{ fontSize: '26px', fontWeight: 800, color: t.text }}>{couple.totalJobs}</div>
             <div style={{ fontSize: '11px', color: t.textSoft }}>lavori insieme</div>
           </div>
           <div>
-            <div className="display" style={{ fontSize: '28px', fontWeight: 800, color: t.text }}>{coupleTotalPts}</div>
+            <div className="display" style={{ fontSize: '26px', fontWeight: 800, color: t.text }}>{coupleTotalPts}</div>
             <div style={{ fontSize: '11px', color: t.textSoft }}>punti combinati</div>
           </div>
           <div>
-            <div className="display" style={{ fontSize: '28px', fontWeight: 800, color: t.text }}>{couple.bothActiveStreak}</div>
+            <div className="display" style={{ fontSize: '26px', fontWeight: 800, color: t.text }}>{couple.bothActiveStreak}</div>
             <div style={{ fontSize: '11px', color: t.textSoft }}>giorni entrambi attivi</div>
           </div>
         </div>
@@ -300,7 +300,7 @@ export default function StatsView({ data, choresById, t, dark }) {
       <SectionTitle icon={TrendingUp} gradient="green" t={t} style={titleStyle}>Andamento vs settimana scorsa</SectionTitle>
       <div style={{ display: 'flex', gap: '10px', marginBottom: '18px' }}>
         {trends.map((tr) => (
-          <div key={tr.user.id} style={{ flex: 1, background: t.card, borderRadius: '18px', padding: '14px', boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(45,42,74,0.05)' }}>
+          <div key={tr.user.id} style={{ flex: 1, background: t.card, borderRadius: '20px', padding: '14px', boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(45,42,74,0.05)' }}>
             <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, display: 'flex', alignItems: 'center', gap: '4px' }} className="display"><Avatar user={tr.user} size={20} /> {tr.user.name}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
               {tr.pct >= 0 ? <TrendingUp size={18} color={t.mint} /> : <TrendingDown size={18} color={t.coral} />}
@@ -320,7 +320,7 @@ export default function StatsView({ data, choresById, t, dark }) {
             <CartesianGrid strokeDasharray="3 3" stroke={t.line} />
             <XAxis dataKey="label" tick={{ fontSize: 11, fill: t.textSoft }} />
             <YAxis tick={{ fontSize: 11, fill: t.textSoft }} />
-            <Tooltip contentStyle={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: '10px', color: t.text }} />
+            <Tooltip contentStyle={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: '12px', color: t.text }} />
             {users.map((u) => <Line key={u.id} type="monotone" dataKey={u.name} stroke={u.color} strokeWidth={3} dot={{ r: 3 }} />)}
           </LineChart>
         </ResponsiveContainer>
@@ -339,13 +339,13 @@ export default function StatsView({ data, choresById, t, dark }) {
                   label={(e) => `${e.pct}%`} labelLine={false} style={{ fontSize: 13, fontWeight: 700 }}>
                   {choresPerUser.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Pie>
-                <Tooltip formatter={(v, n, p) => [`${v} lavori (${p.payload.pct}%)`, n]} contentStyle={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: '10px', color: t.text }} />
+                <Tooltip formatter={(v, n, p) => [`${v} lavori (${p.payload.pct}%)`, n]} contentStyle={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: '12px', color: t.text }} />
               </PieChart>
             </ResponsiveContainer>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '4px' }}>
               {choresPerUser.map((c) => (
                 <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
-                  <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: c.color }} />
+                  <div style={{ width: '12px', height: '12px', borderRadius: '4px', background: c.color }} />
                   <span style={{ color: t.text, fontWeight: 700 }}>{c.name}: {c.pct}%</span>
                 </div>
               ))}
@@ -365,13 +365,13 @@ export default function StatsView({ data, choresById, t, dark }) {
                 <PolarAngleAxis dataKey="category" tick={{ fontSize: 11, fill: t.textSoft }} />
                 <PolarRadiusAxis tick={{ fontSize: 9, fill: t.textSoft }} />
                 {users.map((u) => <Radar key={u.id} name={u.name} dataKey={u.name} stroke={u.color} fill={u.color} fillOpacity={0.3} />)}
-                <Tooltip contentStyle={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: '10px', color: t.text }} />
+                <Tooltip contentStyle={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: '12px', color: t.text }} />
               </RadarChart>
             </ResponsiveContainer>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '16px' }}>
               {users.map((u) => (
                 <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
-                  <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: u.color }} />
+                  <div style={{ width: '12px', height: '12px', borderRadius: '4px', background: u.color }} />
                   <span style={{ color: t.text, fontWeight: 700 }}>{u.name}</span>
                 </div>
               ))}
@@ -390,7 +390,7 @@ export default function StatsView({ data, choresById, t, dark }) {
                 <CartesianGrid strokeDasharray="3 3" stroke={t.line} />
                 <XAxis dataKey="slot" tick={{ fontSize: 11, fill: t.textSoft }} />
                 <YAxis tick={{ fontSize: 11, fill: t.textSoft }} />
-                <Tooltip contentStyle={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: '10px', color: t.text }} />
+                <Tooltip contentStyle={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: '12px', color: t.text }} />
                 {users.map((u) => <Bar key={u.id} dataKey={u.name} fill={u.color} radius={[6, 6, 0, 0]} />)}
               </BarChart>
             </ResponsiveContainer>
@@ -403,7 +403,7 @@ export default function StatsView({ data, choresById, t, dark }) {
         <>
           <SectionTitle icon={Scale} gradient="teal" t={t} style={titleStyle}>Equilibrio dei lavori</SectionTitle>
           <div style={cardStyle}>
-            <div style={{ display: 'flex', height: '28px', borderRadius: '10px', overflow: 'hidden', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', height: '28px', borderRadius: '12px', overflow: 'hidden', marginBottom: '10px' }}>
               {fairness.map((f) => (
                 <div key={f.user.id} style={{ width: `${f.pct}%`, background: f.user.color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 800, transition: 'width 0.5s' }}>
                   {f.pct > 12 ? `${f.pct}%` : ''}
@@ -427,7 +427,7 @@ export default function StatsView({ data, choresById, t, dark }) {
       <div style={cardStyle}>
         <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
           {[['3m', '3 mesi'], ['4m', '4 mesi'], ['6m', '6 mesi'], ['12m', '1 anno']].map(([k, label]) => (
-            <button key={k} onClick={() => setHeatPeriod(k)} style={{ padding: '6px 12px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 700, background: heatPeriod === k ? t.coral : (t.card === '#FFFFFF' ? '#FFF0E6' : 'rgba(255,255,255,0.06)'), color: heatPeriod === k ? '#fff' : t.textSoft }}>{label}</button>
+            <button key={k} onClick={() => setHeatPeriod(k)} style={{ padding: '6px 12px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 700, background: heatPeriod === k ? t.coral : (t.card === '#FFFFFF' ? '#FFF0E6' : 'rgba(255,255,255,0.06)'), color: heatPeriod === k ? '#fff' : t.textSoft }}>{label}</button>
           ))}
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', justifyContent: 'center' }}>
@@ -435,7 +435,7 @@ export default function StatsView({ data, choresById, t, dark }) {
             const intensity = d.count / maxHeat;
             let bg = t.line;
             if (d.count > 0) bg = `rgba(6, 214, 160, ${0.3 + intensity * 0.7})`;
-            return <div key={i} title={`${d.date}: ${d.count} lavori`} style={{ width: '12px', height: '12px', borderRadius: '3px', background: bg }} />;
+            return <div key={i} title={`${d.date}: ${d.count} lavori`} style={{ width: '12px', height: '12px', borderRadius: '4px', background: bg }} />;
           })}
         </div>
         <div style={{ fontSize: '11px', color: t.textSoft, textAlign: 'center', marginTop: '10px' }}>Ogni quadratino è un giorno · più verde = più lavori</div>
@@ -445,7 +445,7 @@ export default function StatsView({ data, choresById, t, dark }) {
       <SectionTitle icon={Medal} gradient="yellow" t={t} style={titleStyle}>Record personali</SectionTitle>
       <div style={{ display: 'flex', gap: '10px', marginBottom: '18px' }}>
         {records.map((r) => (
-          <div key={r.user.id} style={{ flex: 1, background: t.card, borderRadius: '18px', padding: '14px', boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(45,42,74,0.05)' }}>
+          <div key={r.user.id} style={{ flex: 1, background: t.card, borderRadius: '20px', padding: '14px', boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(45,42,74,0.05)' }}>
             <Avatar user={r.user} size={28} />
             <div style={{ fontWeight: 800, fontSize: '13px', color: t.text, marginTop: '6px' }} className="display">{r.user.name}</div>
             <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '4px' }}>Giorno migliore</div>
@@ -465,12 +465,12 @@ export default function StatsView({ data, choresById, t, dark }) {
           const progress = lvl.next ? Math.min(100, (((totalPoints[u.id] || 0) - lvl.min) / range) * 100) : 100;
           const title = userTitle(data.log, choresById, u.id);
           return (
-            <div key={u.id} style={{ flex: 1, background: t.card, borderRadius: '18px', padding: '14px', boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(45,42,74,0.05)' }}>
+            <div key={u.id} style={{ flex: 1, background: t.card, borderRadius: '20px', padding: '14px', boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(45,42,74,0.05)' }}>
               <Avatar user={u} size={30} />
               <div style={{ fontWeight: 800, fontSize: '14px', color: t.text, marginTop: '6px' }} className="display">{u.name}</div>
               <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>{lvl.title}</div>
               {title && <div style={{ fontSize: '11px', fontWeight: 700, color: u.color, marginBottom: '6px' }}>{title.title}</div>}
-              <div style={{ height: '8px', background: t.line, borderRadius: '6px', overflow: 'hidden', marginBottom: '6px' }}>
+              <div style={{ height: '8px', background: t.line, borderRadius: '8px', overflow: 'hidden', marginBottom: '6px' }}>
                 <div style={{ height: '100%', width: `${progress}%`, background: u.color, transition: 'width 0.5s' }} />
               </div>
               <div style={{ fontSize: '20px', fontWeight: 800, color: u.color }} className="display">{totalPoints[u.id] || 0} pt</div>
@@ -547,22 +547,22 @@ function GiftStats({ data, users, t, dark, cardStyle, titleStyle }) {
       <div style={cardStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', marginBottom: '14px' }}>
           <div>
-            <div className="display" style={{ fontSize: '24px', fontWeight: 800, color: t.text }}>{stats.total}</div>
+            <div className="display" style={{ fontSize: '22px', fontWeight: 800, color: t.text }}>{stats.total}</div>
             <div style={{ fontSize: '11px', color: t.textSoft }}>richiesti</div>
           </div>
           <div>
-            <div className="display" style={{ fontSize: '24px', fontWeight: 800, color: t.text }}>{stats.done}</div>
+            <div className="display" style={{ fontSize: '22px', fontWeight: 800, color: t.text }}>{stats.done}</div>
             <div style={{ fontSize: '11px', color: t.textSoft }}>consegnati</div>
           </div>
           <div>
-            <div className="display" style={{ fontSize: '24px', fontWeight: 800, color: t.text }}>{stats.acceptRate != null ? `${stats.acceptRate}%` : '—'}</div>
+            <div className="display" style={{ fontSize: '22px', fontWeight: 800, color: t.text }}>{stats.acceptRate != null ? `${stats.acceptRate}%` : '—'}</div>
             <div style={{ fontSize: '11px', color: t.textSoft }}>accettati</div>
           </div>
         </div>
 
         {/* Chi chiede di più */}
         <div style={{ fontSize: '11px', color: t.textSoft, fontWeight: 700, marginBottom: '6px' }}>Chi chiede di più</div>
-        <div style={{ display: 'flex', height: '24px', borderRadius: '9px', overflow: 'hidden', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', height: '24px', borderRadius: '8px', overflow: 'hidden', marginBottom: '10px' }}>
           {stats.byUser.map((x) => {
             const pct = Math.round((x.asked / stats.totalAsked) * 100);
             return pct > 0 ? (

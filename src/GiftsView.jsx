@@ -184,7 +184,7 @@ export default function GiftsView({
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '14px', fontWeight: 700, color: t.text }}>{g.name}</div>
                   {g.monthlyLimit && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', color: exhausted ? t.coral : t.textSoft, fontWeight: 700, marginTop: '2px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: exhausted ? t.coral : t.textSoft, fontWeight: 700, marginTop: '2px' }}>
                       <Ticket size={12} /> {remaining}/{g.monthlyLimit} questo mese
                     </div>
                   )}
@@ -202,13 +202,13 @@ export default function GiftsView({
 
       {/* Aggiungi / modifica un regalo */}
       {!showAdd ? (
-        <button onClick={openAdd} style={{ width: '100%', marginTop: '10px', background: 'transparent', border: `1.5px dashed ${t.line}`, color: t.textSoft, borderRadius: '14px', padding: '13px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+        <button onClick={openAdd} style={{ width: '100%', marginTop: '10px', background: 'transparent', border: `1.5px dashed ${t.line}`, color: t.textSoft, borderRadius: '16px', padding: '13px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
           <Plus size={16} /> Aggiungi un regalo
         </button>
       ) : (
         <div style={{ ...card, marginTop: '10px' }}>
           <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, marginBottom: '10px' }}>{editingId ? 'Modifica regalo' : 'Nuovo regalo'}</div>
-          <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Es. Colazione a letto" style={{ width: '100%', padding: '11px', borderRadius: '11px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '10px', fontFamily: 'inherit', background: t.card, color: t.text }} />
+          <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Es. Colazione a letto" style={{ width: '100%', padding: '11px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '10px', fontFamily: 'inherit', background: t.card, color: t.text }} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
             {GIFT_EMOJIS.map((em) => (
               <button key={em} onClick={() => setDraft({ ...draft, emoji: em })} style={{ width: '42px', height: '42px', padding: 0, borderRadius: '12px', border: draft.emoji === em ? `2.5px solid ${t.coral}` : '2.5px solid transparent', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -218,7 +218,7 @@ export default function GiftsView({
           </div>
 
           <button onClick={() => setDraft({ ...draft, hasLimit: !draft.hasLimit })} style={{ display: 'flex', alignItems: 'center', gap: '9px', width: '100%', background: 'transparent', border: 'none', padding: 0, marginBottom: draft.hasLimit ? '10px' : '14px', cursor: 'pointer' }}>
-            <div style={{ width: '38px', height: '22px', borderRadius: '11px', background: draft.hasLimit ? t.mint : t.line, position: 'relative', transition: 'background 0.15s', flexShrink: 0 }}>
+            <div style={{ width: '38px', height: '22px', borderRadius: '12px', background: draft.hasLimit ? t.mint : t.line, position: 'relative', transition: 'background 0.15s', flexShrink: 0 }}>
               <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '2px', left: draft.hasLimit ? '18px' : '2px', transition: 'left 0.15s' }} />
             </div>
             <span style={{ fontSize: '13px', fontWeight: 700, color: t.text, display: 'flex', alignItems: 'center', gap: '5px' }}><Ticket size={14} color={t.lavender} /> Buono mensile (numero limitato al mese)</span>
@@ -227,7 +227,7 @@ export default function GiftsView({
           {draft.hasLimit && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
               <span style={{ fontSize: '13px', color: t.textSoft }}>Quante volte al mese:</span>
-              <input type="number" min="1" max="99" value={draft.monthlyLimit} onChange={(e) => setDraft({ ...draft, monthlyLimit: Math.max(1, Number(e.target.value) || 1) })} style={{ width: '64px', padding: '8px', borderRadius: '9px', border: `1px solid ${t.line}`, fontSize: '14px', fontWeight: 700, textAlign: 'center', background: t.card, color: t.text }} />
+              <input type="number" min="1" max="99" value={draft.monthlyLimit} onChange={(e) => setDraft({ ...draft, monthlyLimit: Math.max(1, Number(e.target.value) || 1) })} style={{ width: '64px', padding: '8px', borderRadius: '8px', border: `1px solid ${t.line}`, fontSize: '14px', fontWeight: 700, textAlign: 'center', background: t.card, color: t.text }} />
             </div>
           )}
 
@@ -248,7 +248,7 @@ export default function GiftsView({
             {sectionTitle('Idee da aggiungere', <Sparkles size={16} color={t.sunny} />)}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px' }}>
               {free.slice(0, 8).map((s) => (
-                <button key={s.name} onClick={() => onAddGift(s)} style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: '20px', padding: '8px 12px', fontSize: '12.5px', fontWeight: 700, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', boxShadow: cardShadow }}>
+                <button key={s.name} onClick={() => onAddGift(s)} style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: '20px', padding: '8px 12px', fontSize: '12px', fontWeight: 700, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', boxShadow: cardShadow }}>
                   <Plus size={13} color={t.textSoft} /> <IconTile emoji={s.emoji} kind="gift" size={20} radius={6} /> {s.name}
                 </button>
               ))}
@@ -283,21 +283,21 @@ export default function GiftsView({
                 const val = todayStr(new Date(Date.now() + d * 86400000));
                 const on = reqDate === val;
                 return (
-                  <button key={d} onClick={() => setReqDate(val)} style={{ padding: '9px 13px', borderRadius: '11px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 800, background: on ? t.coral : t.line, color: on ? '#fff' : t.textSoft }}>{label}</button>
+                  <button key={d} onClick={() => setReqDate(val)} style={{ padding: '9px 13px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 800, background: on ? t.coral : t.line, color: on ? '#fff' : t.textSoft }}>{label}</button>
                 );
               })}
-              <input type="date" value={reqDate} min={todayStr()} onChange={(e) => e.target.value && setReqDate(e.target.value)} style={{ padding: '9px 11px', borderRadius: '11px', border: `1px solid ${t.line}`, fontSize: '13px', background: t.card, color: t.text }} />
+              <input type="date" value={reqDate} min={todayStr()} onChange={(e) => e.target.value && setReqDate(e.target.value)} style={{ padding: '9px 11px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '13px', background: t.card, color: t.text }} />
             </div>
 
             <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, marginBottom: '7px' }}>Vuoi aggiungere qualcosa? (facoltativo)</div>
-            <input value={reqNote} onChange={(e) => setReqNote(e.target.value)} placeholder="Es. dopo cena, se non sei stanca..." style={{ width: '100%', padding: '11px', borderRadius: '11px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '18px', fontFamily: 'inherit', background: t.card, color: t.text }} />
+            <input value={reqNote} onChange={(e) => setReqNote(e.target.value)} placeholder="Es. dopo cena, se non sei stanca..." style={{ width: '100%', padding: '11px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '18px', fontFamily: 'inherit', background: t.card, color: t.text }} />
 
             {(() => {
               if (!requesting.monthlyLimit) return null;
               const remaining = remainingFor(requesting, reqDate);
               const mese = parseInt(reqDate.slice(5, 7), 10) === parseInt(todayStr().slice(5, 7), 10) ? 'questo mese' : 'in quel mese';
               return (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: 700, color: remaining === 0 ? t.coral : t.textSoft, marginBottom: '14px', marginTop: '-8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: remaining === 0 ? t.coral : t.textSoft, marginBottom: '14px', marginTop: '-8px' }}>
                   <Ticket size={13} /> {remaining === 0 ? `Buono esaurito ${mese}` : `${remaining}/${requesting.monthlyLimit} rimasti ${mese}`}
                 </div>
               );
@@ -317,7 +317,7 @@ export default function GiftsView({
           <div className="picker-sheet" style={{ background: t.card, width: '100%', borderRadius: '28px 28px 0 0', padding: '24px 20px calc(24px + env(safe-area-inset-bottom))' }} onClick={(e) => e.stopPropagation()}>
             <div className="display" style={{ fontSize: '17px', fontWeight: 800, color: t.text, marginBottom: '4px' }}>Non per {giftDayLabel(declining.date)}</div>
             <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '14px' }}>Puoi dire perché, o proporre un altro momento.</div>
-            <input value={declineNote} onChange={(e) => setDeclineNote(e.target.value)} placeholder="Es. quel giorno lavoro, facciamo sabato?" style={{ width: '100%', padding: '11px', borderRadius: '11px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '16px', fontFamily: 'inherit', background: t.card, color: t.text }} />
+            <input value={declineNote} onChange={(e) => setDeclineNote(e.target.value)} placeholder="Es. quel giorno lavoro, facciamo sabato?" style={{ width: '100%', padding: '11px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '16px', fontFamily: 'inherit', background: t.card, color: t.text }} />
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => setDeclining(null)} style={btn('transparent', t.textSoft)}>Annulla</button>
               <button onClick={() => { onRespondGift(declining.id, false, declineNote.trim()); setDeclining(null); }} style={btn(t.coral, '#fff')}>Invia risposta</button>

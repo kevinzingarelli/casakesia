@@ -144,12 +144,19 @@ export function Avatar({ user, size = 40 }) {
 }
 
 /** Titolo di sezione con tessera-icona, come le liste di Salute/Impostazioni. */
+/**
+ * Titolo di sezione. Volutamente SOTTOTONO rispetto alle tessere dei lavori:
+ * il colore pieno appartiene al contenuto (i lavori, i regali), non
+ * all'arredamento. Prima ogni titolo aveva una tessera sfumata a tinta piena
+ * che competeva con le icone sotto, e il risultato era che non vinceva nulla.
+ * Qui resta la stessa forma, ma con la tinta al 14% e l'icona colorata.
+ */
 export function SectionTitle({ icon: Icon, gradient = 'blue', children, t, style }) {
-  const [c1, c2] = GRADIENTS[gradient] || GRADIENTS.blue;
+  const [, c2] = GRADIENTS[gradient] || GRADIENTS.blue;
   return (
-    <div className="display" style={{ display: 'flex', alignItems: 'center', gap: '9px', fontSize: '16px', fontWeight: 700, color: t.text, marginBottom: '10px', ...style }}>
-      <span style={{ width: 28, height: 28, borderRadius: 8, background: `linear-gradient(145deg, ${c1}, ${c2})`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <Icon size={16} color="#fff" strokeWidth={2.4} />
+    <div className="display" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px', fontWeight: 700, color: t.text, marginBottom: '12px', ...style }}>
+      <span style={{ width: 26, height: 26, borderRadius: 8, background: `${c2}24`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={15} color={c2} strokeWidth={2.4} />
       </span>
       {children}
     </div>

@@ -968,20 +968,20 @@ function App({ householdId, household, onSignOut }) {
             {(confetti.dedicated ? ['❤️', '💕', '💖', '💗', '💝'] : ['🎉', '✨', '⭐', '🎊', '💥', '🌟']).map((e, i) => (
               <span key={i} className="confetti-piece" style={{ left: `${(i - 2.5) * 26}px`, animationDelay: `${i * 0.05}s` }}>{e}</span>
             ))}
-            <div className="pop-card display" style={{ background: t.card, borderRadius: '24px', padding: '20px 28px', boxShadow: '0 12px 30px rgba(45,42,74,0.25)', border: `3px solid ${confetti.user.color}` }}>
+            <div className="pop-card display" style={{ background: t.card, borderRadius: '20px', padding: '20px 28px', boxShadow: '0 12px 30px rgba(45,42,74,0.25)', border: `3px solid ${confetti.user.color}` }}>
               <div style={{ display: 'flex', justifyContent: 'center' }}><IconTile emoji={confetti.chore.emoji} size={56} /></div>
               <div style={{ fontSize: '20px', fontWeight: 700, marginTop: '8px', color: t.text }}>+{confetti.points} punti!{confetti.count > 1 ? ` (×${confetti.count})` : ''}</div>
               <div style={{ fontSize: '14px', color: t.textSoft, marginTop: '2px' }}>{confetti.user.name}</div>
               {confetti.retro && <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '4px' }}>Retrodatato al {parseLocalDate(confetti.retro).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</div>}
               {confetti.dedicated && <div style={{ fontSize: '13px', color: confetti.user.color, marginTop: '6px', fontWeight: 700 }}>Dedicato a {confetti.dedicated.name} ❤</div>}
               {confetti.levelUp && (
-                <div className="pop-card achievement-toast" style={{ marginTop: '12px', background: confetti.user.color, borderRadius: '14px', padding: '10px 16px' }}>
+                <div className="pop-card achievement-toast" style={{ marginTop: '12px', background: confetti.user.color, borderRadius: '16px', padding: '10px 16px' }}>
                   <div style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>LIVELLO RAGGIUNTO</div>
                   <div style={{ fontSize: '15px', fontWeight: 800, color: '#fff' }}>{confetti.levelUp.title}</div>
                 </div>
               )}
               {confetti.achievement && !confetti.levelUp && (
-                <div className="pop-card achievement-toast" style={{ marginTop: '12px', background: t.sunny, borderRadius: '14px', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="pop-card achievement-toast" style={{ marginTop: '12px', background: t.sunny, borderRadius: '16px', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Trophy size={22} color="#946800" />
                   <div style={{ textAlign: 'left' }}>
                     <div style={{ fontSize: '11px', fontWeight: 700, color: '#946800' }}>NUOVO TRAGUARDO</div>
@@ -1019,7 +1019,7 @@ function App({ householdId, household, onSignOut }) {
               <div style={{ background: `linear-gradient(160deg, ${t.coral}22, ${t.lavender}22)`, borderRadius: '32px 32px 0 0', padding: '28px 24px 20px', textAlign: 'center', position: 'relative' }}>
                 <button onClick={() => setPickerChore(null)} style={{ position: 'absolute', top: '16px', right: '16px', background: t.line, border: 'none', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: t.textSoft }}><X size={16} /></button>
                 <div className="hero-emoji" style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}><IconTile emoji={pickerChore.emoji} size={72} /></div>
-                <div className="display" style={{ fontSize: '24px', fontWeight: 700, color: t.text, marginBottom: '4px' }}>{pickerChore.name}</div>
+                <div className="display" style={{ fontSize: '22px', fontWeight: 700, color: t.text, marginBottom: '4px' }}>{pickerChore.name}</div>
                 <div style={{ fontSize: '15px', color: t.textSoft }}>
                   {pickerSelections.length === 0 ? 'Nessuna selezione' : <span style={{ color: t.coral, fontWeight: 800 }}>+{totalPts} punti</span>}
                   {!hasSubtasks && pickerCount > 1 && <span style={{ color: t.textSoft }}> ({pickerChore.points} × {pickerCount})</span>}
@@ -1069,7 +1069,7 @@ function App({ householdId, household, onSignOut }) {
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', marginBottom: '6px' }}>
                       <button onClick={() => setPickerCount((c) => Math.max(1, c - 1))} style={{ width: '52px', height: '52px', borderRadius: '50%', border: `2px solid ${t.line}`, background: t.card, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Minus size={24} /></button>
-                      <div className="display" style={{ fontSize: '36px', fontWeight: 800, minWidth: '50px', textAlign: 'center', color: t.text }}>{pickerCount}</div>
+                      <div className="display" style={{ fontSize: '34px', fontWeight: 800, minWidth: '50px', textAlign: 'center', color: t.text }}>{pickerCount}</div>
                       <button onClick={() => setPickerCount((c) => Math.min(20, c + 1))} style={{ width: '52px', height: '52px', borderRadius: '50%', border: `2px solid ${t.line}`, background: t.card, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={24} /></button>
                     </div>
                     <div style={{ fontSize: '12px', color: t.textSoft, textAlign: 'center', marginBottom: '16px' }}>Quante volte?</div>
@@ -1085,10 +1085,10 @@ function App({ householdId, household, onSignOut }) {
                       const ds = todayStr(d);
                       const label = daysAgo === 0 ? 'Oggi' : daysAgo === 1 ? 'Ieri' : d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' });
                       return (
-                        <button key={daysAgo} onClick={() => setPickerDate(ds)} style={{ padding: '8px 12px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 700, background: pickerDate === ds ? t.coral : t.card, color: pickerDate === ds ? '#fff' : t.textSoft }}>{label}</button>
+                        <button key={daysAgo} onClick={() => setPickerDate(ds)} style={{ padding: '8px 12px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 700, background: pickerDate === ds ? t.coral : t.card, color: pickerDate === ds ? '#fff' : t.textSoft }}>{label}</button>
                       );
                     })}
-                    <input type="date" value={pickerDate} max={todayStr()} onChange={(e) => setPickerDate(e.target.value)} style={{ padding: '6px 8px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '12px' }} />
+                    <input type="date" value={pickerDate} max={todayStr()} onChange={(e) => setPickerDate(e.target.value)} style={{ padding: '6px 8px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '12px' }} />
                   </div>
                 </div>
 
@@ -1102,7 +1102,7 @@ function App({ householdId, household, onSignOut }) {
                 {/* Chi ha fatto */}
                 {me ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <button onClick={() => logSelection(pickerChore, pickerSelections, me, pickerCount, pickerDate, pickerDedicate)} disabled={pickerSelections.length === 0} style={{ background: pickerSelections.length === 0 ? t.line : me.color, border: 'none', borderRadius: '20px', padding: '18px', color: '#fff', fontFamily: t.fontDisplay, fontWeight: 700, fontSize: '18px', cursor: pickerSelections.length === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: pickerSelections.length === 0 ? 0.5 : 1 }}>
+                    <button onClick={() => logSelection(pickerChore, pickerSelections, me, pickerCount, pickerDate, pickerDedicate)} disabled={pickerSelections.length === 0} style={{ background: pickerSelections.length === 0 ? t.line : me.color, border: 'none', borderRadius: '20px', padding: '18px', color: '#fff', fontFamily: t.fontDisplay, fontWeight: 700, fontSize: '17px', cursor: pickerSelections.length === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: pickerSelections.length === 0 ? 0.5 : 1 }}>
                       <Check size={22} strokeWidth={3} /> L'ho fatto io
                     </button>
                     {otherUser && (
@@ -1114,7 +1114,7 @@ function App({ householdId, household, onSignOut }) {
                 ) : (
                   <div style={{ display: 'flex', gap: '12px' }}>
                     {data.users.map((u) => (
-                      <button key={u.id} onClick={() => logSelection(pickerChore, pickerSelections, u, pickerCount, pickerDate, false)} disabled={pickerSelections.length === 0} style={{ flex: 1, background: pickerSelections.length === 0 ? t.line : u.color, border: 'none', borderRadius: '20px', padding: '18px 8px', color: '#fff', fontFamily: t.fontDisplay, fontWeight: 700, fontSize: '16px', cursor: pickerSelections.length === 0 ? 'default' : 'pointer', opacity: pickerSelections.length === 0 ? 0.5 : 1 }}>
+                      <button key={u.id} onClick={() => logSelection(pickerChore, pickerSelections, u, pickerCount, pickerDate, false)} disabled={pickerSelections.length === 0} style={{ flex: 1, background: pickerSelections.length === 0 ? t.line : u.color, border: 'none', borderRadius: '20px', padding: '18px 8px', color: '#fff', fontFamily: t.fontDisplay, fontWeight: 700, fontSize: '15px', cursor: pickerSelections.length === 0 ? 'default' : 'pointer', opacity: pickerSelections.length === 0 ? 0.5 : 1 }}>
                         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '6px' }}><span style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(255,255,255,0.28)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800 }}>{u.name.charAt(0).toUpperCase()}</span></div>{u.name}
                       </button>
                     ))}
@@ -1146,7 +1146,7 @@ function App({ householdId, household, onSignOut }) {
 
       {/* Modalità demo: sempre visibile, per non confonderla mai con dati veri */}
       {isDemo && (
-        <div style={{ margin: '0 18px 12px', background: '#2D2A4A', color: '#fff', borderRadius: '14px', padding: '10px 14px', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+        <div style={{ margin: '0 18px 12px', background: '#2D2A4A', color: '#fff', borderRadius: '16px', padding: '10px 14px', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
           <span>Modalità demo — dati finti, niente viene salvato</span>
           <a href="/" style={{ color: '#fff', textDecoration: 'underline', flexShrink: 0 }}>Esci</a>
         </div>
@@ -1158,7 +1158,7 @@ function App({ householdId, household, onSignOut }) {
           <div style={{ fontSize: '14px', fontWeight: 800, color: '#7A5B00', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '7px' }}>
             <AlertTriangle size={17} /> Mancano {recuperabile.mancanti} lavori
           </div>
-          <div style={{ fontSize: '12.5px', color: '#7A5B00', marginBottom: '10px', lineHeight: 1.45 }}>
+          <div style={{ fontSize: '12px', color: '#7A5B00', marginBottom: '10px', lineHeight: 1.45 }}>
             Su questo telefono c'è ancora una copia completa. Posso rimetterli a posto, tenendo anche quelli segnati nel frattempo.
           </div>
           <button
@@ -1183,7 +1183,7 @@ function App({ householdId, household, onSignOut }) {
           <div style={{ fontSize: '13px', fontWeight: 700, color: t.text, marginBottom: '8px' }}>Chi sei? (così segni più velocemente)</div>
           <div style={{ display: 'flex', gap: '8px' }}>
             {data.users.map((u) => (
-              <button key={u.id} onClick={() => setIdentity(u.id)} style={{ flex: 1, background: u.color, border: 'none', borderRadius: '14px', padding: '11px', color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <button key={u.id} onClick={() => setIdentity(u.id)} style={{ flex: 1, background: u.color, border: 'none', borderRadius: '16px', padding: '11px', color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                 <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,255,255,0.28)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 800 }}>{u.name.charAt(0).toUpperCase()}</span>
                 {u.name}
               </button>
@@ -1204,7 +1204,7 @@ function App({ householdId, household, onSignOut }) {
       {tab === 'home' && (
         <div className="fade-in" style={{ padding: '0 18px' }}>
           {/* Score race */}
-          <div className="slide-up" style={{ background: t.card, borderRadius: '24px', padding: '18px', boxShadow: cardShadow, marginBottom: '16px' }}>
+          <div className="slide-up" style={{ background: t.card, borderRadius: '20px', padding: '18px', boxShadow: cardShadow, marginBottom: '16px' }}>
             <div style={{ display: 'flex', gap: '12px' }}>
               {data.users.map((u) => {
                 const lvl = getLevel(totals[u.id] || 0);
@@ -1215,7 +1215,7 @@ function App({ householdId, household, onSignOut }) {
                   <div key={u.id} style={{ flex: 1 }}>
                     <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '7px', color: t.text }}>
                       <Avatar user={u} size={26} /> {u.name}
-                      {me && me.id === u.id && <span style={{ fontSize: '10px', background: u.color, color: '#fff', borderRadius: '6px', padding: '1px 5px' }}>tu</span>}
+                      {me && me.id === u.id && <span style={{ fontSize: '10px', background: u.color, color: '#fff', borderRadius: '8px', padding: '1px 5px' }}>tu</span>}
                     </div>
                     <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>{lvl.title}</div>
                     <div style={{ fontSize: '26px', fontWeight: 800, color: t.text }} className="display">{totals[u.id] || 0}</div>
@@ -1258,7 +1258,7 @@ function App({ householdId, household, onSignOut }) {
           <SectionTitle icon={Zap} gradient="orange" t={t}>Azioni rapide</SectionTitle>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '18px' }}>
             {data.chores.slice(0, 6).map((c, i) => (
-              <button key={c.id} onClick={() => handleChoreClick(c)} className="quick-card slide-up" style={{ background: t.card, border: 'none', borderRadius: '18px', padding: '14px', textAlign: 'left', boxShadow: cardShadow, cursor: 'pointer', animationDelay: `${i * 0.04}s` }}>
+              <button key={c.id} onClick={() => handleChoreClick(c)} className="quick-card slide-up" style={{ background: t.card, border: 'none', borderRadius: '20px', padding: '14px', textAlign: 'left', boxShadow: cardShadow, cursor: 'pointer', animationDelay: `${i * 0.04}s` }}>
                 <IconTile emoji={c.emoji} size={40} />
                 <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px', lineHeight: 1.2, color: t.text }}>{c.name}</div>
                 <div style={{ fontSize: '12px', color: '#D49A00', fontWeight: 700, marginTop: '2px' }}>+{c.points} pt</div>
@@ -1268,7 +1268,7 @@ function App({ householdId, household, onSignOut }) {
 
           {/* Obiettivo di coppia */}
           {coupleGoalProgress && (
-            <div className="slide-up" style={{ background: t.card, borderRadius: '18px', padding: '16px', boxShadow: cardShadow, marginBottom: '16px', borderLeft: `4px solid ${t.lavender}` }}>
+            <div className="slide-up" style={{ background: t.card, borderRadius: '20px', padding: '16px', boxShadow: cardShadow, marginBottom: '16px', borderLeft: `4px solid ${t.lavender}` }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, display: 'flex', alignItems: 'center', gap: '6px' }}><Target size={16} color={t.lavender} /> Obiettivo di coppia</div>
                 <button onClick={() => setShowGoalEdit(true)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', fontSize: '12px' }}><Pencil size={14} /></button>
@@ -1316,13 +1316,13 @@ function App({ householdId, household, onSignOut }) {
 
           {/* Messaggio motivazionale + citazione — contenuto d'atmosfera, in fondo e più discreto */}
           {motivation && (
-            <div className="slide-up" style={{ background: t.card, borderRadius: t.radiusSm, padding: '10px 14px', marginBottom: '10px', fontSize: '12.5px', color: t.textSoft, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: cardShadow }}>
+            <div className="slide-up" style={{ background: t.card, borderRadius: t.radiusSm, padding: '10px 14px', marginBottom: '10px', fontSize: '12px', color: t.textSoft, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: cardShadow }}>
               <Sparkles size={14} color={t.sunny} /> {motivation}
             </div>
           )}
           <div className="slide-up" style={{ background: t.style === 'minimal' ? (dark ? 'rgba(167,139,250,0.1)' : '#FFFFFF') : (dark ? 'rgba(167,139,250,0.1)' : '#F8F5FF'), borderRadius: t.radiusSm, padding: '12px 14px', marginBottom: '18px', borderLeft: `3px solid ${t.lavender}`, boxShadow: t.style === 'minimal' ? cardShadow : 'none', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '12.5px', fontStyle: 'italic', color: t.textSoft, lineHeight: 1.45 }}>"{quote.text}"</div>
+              <div style={{ fontSize: '12px', fontStyle: 'italic', color: t.textSoft, lineHeight: 1.45 }}>"{quote.text}"</div>
               <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '4px', fontWeight: 700, opacity: 0.8 }}>— {quote.author}{quote.source ? `, ${quote.source}` : ''}</div>
             </div>
             <button onClick={() => toggleSaveQuote(quote)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: quoteSaved ? t.coral : t.textSoft, flexShrink: 0, padding: '2px' }} title={quoteSaved ? 'Salvata' : 'Salva citazione'}>
@@ -1373,14 +1373,14 @@ function App({ householdId, household, onSignOut }) {
             <button onClick={() => setShowAddChore((s) => !s)} style={{ background: t.lavender, border: 'none', color: '#fff', borderRadius: '12px', padding: '8px 12px', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}><Plus size={16} /> Nuovo</button>
           </div>
           {showAddChore && (
-            <div className="pop-card" style={{ background: t.card, borderRadius: '18px', padding: '14px', marginBottom: '14px', boxShadow: cardShadow }}>
-              <input placeholder="Nome del lavoro" value={newChore.name} onChange={(e) => setNewChore({ ...newChore, name: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, marginBottom: '8px', fontSize: '14px', fontFamily: 'inherit' }} />
+            <div className="pop-card" style={{ background: t.card, borderRadius: '20px', padding: '14px', marginBottom: '14px', boxShadow: cardShadow }}>
+              <input placeholder="Nome del lavoro" value={newChore.name} onChange={(e) => setNewChore({ ...newChore, name: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, marginBottom: '8px', fontSize: '14px', fontFamily: 'inherit' }} />
               <EmojiPicker options={CHORE_EMOJIS} value={newChore.emoji} onChange={(em) => setNewChore({ ...newChore, emoji: em })} t={t} />
               <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                <input type="number" min="1" placeholder="Punti" value={newChore.points} onChange={(e) => setNewChore({ ...newChore, points: e.target.value })} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px' }} />
-                <select value={newChore.category} onChange={(e) => setNewChore({ ...newChore, category: e.target.value })} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px' }}>{allCategories.map((c) => <option key={c}>{c}</option>)}</select>
+                <input type="number" min="1" placeholder="Punti" value={newChore.points} onChange={(e) => setNewChore({ ...newChore, points: e.target.value })} style={{ flex: 1, padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px' }} />
+                <select value={newChore.category} onChange={(e) => setNewChore({ ...newChore, category: e.target.value })} style={{ flex: 1, padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px' }}>{allCategories.map((c) => <option key={c}>{c}</option>)}</select>
               </div>
-              <button onClick={addChore} style={{ width: '100%', marginTop: '8px', background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Aggiungi lavoro</button>
+              <button onClick={addChore} style={{ width: '100%', marginTop: '8px', background: t.mint, border: 'none', color: '#fff', borderRadius: '12px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Aggiungi lavoro</button>
             </div>
           )}
           <div style={{ fontSize: '11px', color: t.textSoft, marginBottom: '10px', background: t.card, borderRadius: t.radiusSm, padding: '10px 12px' }}>Cambiando i punti di un lavoro, <strong>tutto lo storico si ricalcola</strong> automaticamente.</div>
@@ -1444,7 +1444,7 @@ function App({ householdId, household, onSignOut }) {
       {/* ===== PROGRESSI (Storico + Serie + Stats, un unico tab con selettore) ===== */}
       {tab === 'progress' && (
         <div className="fade-in">
-          <div style={{ padding: '0 18px', marginBottom: '14px', display: 'flex', gap: '6px', background: t.card, borderRadius: '14px', boxShadow: cardShadow, margin: '0 18px 14px' }}>
+          <div style={{ padding: '0 18px', marginBottom: '14px', display: 'flex', gap: '6px', background: t.card, borderRadius: '16px', boxShadow: cardShadow, margin: '0 18px 14px' }}>
             {[
               { id: 'storico', label: 'Storico' },
               { id: 'serie', label: 'Serie' },
@@ -1452,7 +1452,7 @@ function App({ householdId, household, onSignOut }) {
             ].map((s) => {
               const active = progressSection === s.id;
               return (
-                <button key={s.id} onClick={() => setProgressSection(s.id)} style={{ flex: 1, padding: '10px 0', borderRadius: '11px', border: 'none', fontWeight: 800, fontSize: '13px', cursor: 'pointer', background: active ? t.coral : 'transparent', color: active ? '#fff' : t.textSoft, transition: 'background 0.15s, color 0.15s' }}>{s.label}</button>
+                <button key={s.id} onClick={() => setProgressSection(s.id)} style={{ flex: 1, padding: '10px 0', borderRadius: '12px', border: 'none', fontWeight: 800, fontSize: '13px', cursor: 'pointer', background: active ? t.coral : 'transparent', color: active ? '#fff' : t.textSoft, transition: 'background 0.15s, color 0.15s' }}>{s.label}</button>
               );
             })}
           </div>
@@ -1483,7 +1483,7 @@ function App({ householdId, household, onSignOut }) {
           <div style={{ display: 'flex', gap: '6px', marginBottom: '14px', flexWrap: 'wrap' }}>
             {['all', ...allCategories].map((cat) => {
               const active = historyCat === cat;
-              return <button key={cat} onClick={() => setHistoryCat(cat)} style={{ padding: '6px 10px', borderRadius: '10px', border: 'none', fontWeight: 700, fontSize: '12px', cursor: 'pointer', background: active ? t.lavender : t.card, color: active ? '#fff' : t.textSoft }}>{cat === 'all' ? 'Tutte' : cat}</button>;
+              return <button key={cat} onClick={() => setHistoryCat(cat)} style={{ padding: '6px 10px', borderRadius: '12px', border: 'none', fontWeight: 700, fontSize: '12px', cursor: 'pointer', background: active ? t.lavender : t.card, color: active ? '#fff' : t.textSoft }}>{cat === 'all' ? 'Tutte' : cat}</button>;
             })}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1505,7 +1505,7 @@ function App({ householdId, household, onSignOut }) {
                     {/* Intestazione giorno */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '14px 4px 8px', position: 'sticky', top: 0 }}>
                       <div className="display" style={{ fontSize: '14px', fontWeight: 800, color: t.text, textTransform: 'capitalize' }}>{g.label}</div>
-                      <div style={{ fontSize: '12px', fontWeight: 800, color: t.coral, background: t.style === 'minimal' ? 'transparent' : (dark ? 'rgba(255,107,107,0.12)' : '#FFF0EE'), padding: '3px 10px', borderRadius: '10px' }}>{g.entries.length} {g.entries.length === 1 ? 'lavoro' : 'lavori'} · {dayPts} pt</div>
+                      <div style={{ fontSize: '12px', fontWeight: 800, color: t.coral, background: t.style === 'minimal' ? 'transparent' : (dark ? 'rgba(255,107,107,0.12)' : '#FFF0EE'), padding: '3px 10px', borderRadius: '12px' }}>{g.entries.length} {g.entries.length === 1 ? 'lavoro' : 'lavori'} · {dayPts} pt</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {g.entries.map((e) => {
@@ -1597,7 +1597,7 @@ function App({ householdId, household, onSignOut }) {
       {undoToast && (
         <div className="slide-up" style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 'calc(88px + env(safe-area-inset-bottom))', zIndex: 65, background: dark ? '#2D2A4A' : '#2D2A4A', color: '#fff', borderRadius: '16px', padding: '10px 10px 10px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: '12px', maxWidth: 'min(360px, calc(100vw - 32px))' }}>
           <span style={{ fontSize: '13px', fontWeight: 600 }}>{undoToast.label} segnato</span>
-          <button onClick={() => undoLog(undoToast.ids)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: '10px', padding: '8px 12px', fontWeight: 800, fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Annulla</button>
+          <button onClick={() => undoLog(undoToast.ids)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: '12px', padding: '8px 12px', fontWeight: 800, fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Annulla</button>
         </div>
       )}
 
@@ -1613,7 +1613,7 @@ function App({ householdId, household, onSignOut }) {
           const Icon = it.icon; const active = tab === it.id;
           const pending = it.id === 'gifts' && me ? (data.giftRequests || []).filter((r) => r.toUserId === me.id && r.status === 'pending').length : 0;
           return (
-            <button key={it.id} onClick={() => setTab(it.id)} className="nav-btn" style={{ position: 'relative', background: 'transparent', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', color: active ? t.coral : t.textSoft, cursor: 'pointer', fontSize: '10.5px', fontWeight: 700, flex: 1, minHeight: '50px', padding: '4px 0' }}>
+            <button key={it.id} onClick={() => setTab(it.id)} className="nav-btn" style={{ position: 'relative', background: 'transparent', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', color: active ? t.coral : t.textSoft, cursor: 'pointer', fontSize: '11px', fontWeight: 700, flex: 1, minHeight: '50px', padding: '4px 0' }}>
               <Icon size={22} />
               {it.label}
               {pending > 0 && <span style={{ position: 'absolute', top: '2px', right: 'calc(50% - 18px)', minWidth: '16px', height: '16px', borderRadius: '8px', background: t.coral, color: '#fff', fontSize: '10px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{pending}</span>}
@@ -1640,13 +1640,13 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
       {household && (
         <>
           <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>La tua casa</div>
-          <div style={{ background: t.card, borderRadius: '18px', padding: '14px', boxShadow: cardShadow, marginBottom: '20px' }}>
+          <div style={{ background: t.card, borderRadius: '20px', padding: '14px', boxShadow: cardShadow, marginBottom: '20px' }}>
             {household.memberCount < 2 ? (
               <>
                 <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '10px' }}>In attesa che il tuo partner si unisca. Condividi questo codice:</div>
                 <div
                   onClick={() => { if (household.inviteCode) { navigator.clipboard?.writeText(household.inviteCode).then(() => { setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2000); }).catch(() => {}); } }}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', background: t.bg, border: `1.5px dashed ${t.coral}`, borderRadius: '14px', padding: '12px', cursor: 'pointer', marginBottom: '12px' }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', background: t.bg, border: `1.5px dashed ${t.coral}`, borderRadius: '16px', padding: '12px', cursor: 'pointer', marginBottom: '12px' }}
                 >
                   <div className="display" style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '4px', color: t.text }}>{household.inviteCode || '—'}</div>
                   {codeCopied ? <Check size={16} color={t.mint} /> : <Copy size={16} color={t.textSoft} />}
@@ -1664,7 +1664,7 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
 
       {/* Identità */}
       <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>La tua identità su questo telefono</div>
-      <div style={{ background: t.card, borderRadius: '18px', padding: '14px', boxShadow: cardShadow, marginBottom: '20px' }}>
+      <div style={{ background: t.card, borderRadius: '20px', padding: '14px', boxShadow: cardShadow, marginBottom: '20px' }}>
         <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '10px' }}>Scegli chi sei: i lavori che segni saranno automaticamente tuoi.</div>
         <div style={{ display: 'flex', gap: '8px' }}>
           {data.users.map((u) => (
@@ -1678,10 +1678,10 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
       <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Giocatori</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
         {data.users.map((u) => (
-          <div key={u.id} style={{ background: t.card, borderRadius: '18px', padding: '14px', boxShadow: cardShadow }}>
+          <div key={u.id} style={{ background: t.card, borderRadius: '20px', padding: '14px', boxShadow: cardShadow }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
               <Avatar user={u} size={40} />
-              <input value={u.name} onChange={(e) => updateUser(u.id, { name: e.target.value })} className="display" style={{ flex: 1, border: `1px solid ${t.line}`, borderRadius: '10px', padding: '8px 10px', fontSize: '15px', fontWeight: 700 }} />
+              <input value={u.name} onChange={(e) => updateUser(u.id, { name: e.target.value })} className="display" style={{ flex: 1, border: `1px solid ${t.line}`, borderRadius: '12px', padding: '8px 10px', fontSize: '15px', fontWeight: 700 }} />
             </div>
             <div style={{ fontSize: '12px', color: t.textSoft, margin: '10px 0 6px' }}>Colore (è anche il tuo avatar)</div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -1711,7 +1711,7 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
                 <input
                   defaultValue={c}
                   onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== c) renameCategory(c, v); else e.target.value = c; }}
-                  style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px', fontWeight: 700, background: t.card, color: t.text }}
+                  style={{ flex: 1, padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px', fontWeight: 700, background: t.card, color: t.text }}
                 />
                 <span style={{ fontSize: '11px', color: t.textSoft, minWidth: '52px', textAlign: 'right' }}>{used} {used === 1 ? 'lavoro' : 'lavori'}</span>
                 <button
@@ -1728,8 +1728,8 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
           })}
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <input value={newCat} onChange={(e) => setNewCat(e.target.value)} placeholder="Nuova categoria (es. Garage)" style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '13px' }} />
-          <button onClick={() => { addCustomCategory(newCat); setNewCat(''); }} style={{ background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '8px 16px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>Aggiungi</button>
+          <input value={newCat} onChange={(e) => setNewCat(e.target.value)} placeholder="Nuova categoria (es. Garage)" style={{ flex: 1, padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '13px' }} />
+          <button onClick={() => { addCustomCategory(newCat); setNewCat(''); }} style={{ background: t.mint, border: 'none', color: '#fff', borderRadius: '12px', padding: '8px 16px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>Aggiungi</button>
         </div>
       </div>
 
@@ -1739,12 +1739,12 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
         <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '10px' }}>Scegli l'aspetto dell'app. Puoi tornare indietro quando vuoi con un tocco.</div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={() => setStyle('pop')} style={{ flex: 1, padding: '14px', borderRadius: t.radiusSm, border: `2px solid ${style === 'pop' ? t.coral : t.line}`, background: style === 'pop' ? (dark ? 'rgba(255,107,107,0.12)' : '#FFF0EE') : 'transparent', cursor: 'pointer', textAlign: 'center' }}>
-            <div style={{ fontSize: '24px' }}>🎨</div>
+            <div style={{ fontSize: '22px' }}>🎨</div>
             <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, marginTop: '4px' }}>Colorato</div>
             <div style={{ fontSize: '10px', color: t.textSoft }}>Vivace e giocoso {style === 'pop' ? '✓' : ''}</div>
           </button>
           <button onClick={() => setStyle('minimal')} style={{ flex: 1, padding: '14px', borderRadius: t.radiusSm, border: `2px solid ${style === 'minimal' ? t.coral : t.line}`, background: style === 'minimal' ? (dark ? 'rgba(255,107,107,0.12)' : '#FFF0EE') : 'transparent', cursor: 'pointer', textAlign: 'center' }}>
-            <div style={{ fontSize: '24px' }}>🍏</div>
+            <div style={{ fontSize: '22px' }}>🍏</div>
             <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, marginTop: '4px' }}>Minimal</div>
             <div style={{ fontSize: '10px', color: t.textSoft }}>Pulito, stile Apple {style === 'minimal' ? '✓' : ''}</div>
           </button>
@@ -1764,7 +1764,7 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
       </button>
       <button onClick={onOpenNews} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '20px', boxShadow: cardShadow }}>
         <Bell size={18} color={t.sunny} /> Novità dell'app
-        {unreadNews > 0 && <span style={{ marginLeft: 'auto', background: t.coral, color: '#fff', borderRadius: '10px', padding: '2px 8px', fontSize: '11px', fontWeight: 800 }}>{unreadNews} da leggere</span>}
+        {unreadNews > 0 && <span style={{ marginLeft: 'auto', background: t.coral, color: '#fff', borderRadius: '12px', padding: '2px 8px', fontSize: '11px', fontWeight: 800 }}>{unreadNews} da leggere</span>}
       </button>
 
       {/* Preferenze */}
@@ -1786,7 +1786,7 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
           return (
             <div style={{ background: t.card, borderRadius: t.radiusSm, padding: '14px', boxShadow: cardShadow, marginBottom: '20px', fontSize: '13px', color: t.text, lineHeight: 1.5 }}>
               📲 Su iPhone le notifiche funzionano solo se l'app è <strong>aggiunta alla schermata Home</strong>.<br />
-              <span style={{ color: t.textSoft, fontSize: '12.5px' }}>In Safari tocca <strong>Condividi</strong> → <strong>Aggiungi a Home</strong>, poi apri Casa Points dall'icona e torna qui.</span>
+              <span style={{ color: t.textSoft, fontSize: '12px' }}>In Safari tocca <strong>Condividi</strong> → <strong>Aggiungi a Home</strong>, poi apri Casa Points dall'icona e torna qui.</span>
             </div>
           );
         }
@@ -1812,7 +1812,7 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
               <Bell size={16} />
               {pushBusy ? 'Un attimo…' : attive ? 'Disattiva su questo telefono' : 'Attiva le notifiche'}
             </button>
-            {pushMsg && <div style={{ fontSize: '12.5px', color: t.text, marginTop: '10px', lineHeight: 1.5 }}>{pushMsg}</div>}
+            {pushMsg && <div style={{ fontSize: '12px', color: t.text, marginTop: '10px', lineHeight: 1.5 }}>{pushMsg}</div>}
           </div>
         );
       })()}
@@ -1828,7 +1828,7 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
               <span style={{ fontSize: '22px' }}>{p.emoji}</span>
               <span style={{ flex: 1 }}>
                 <span style={{ display: 'block', fontSize: '14px', fontWeight: 800, color: t.text }}>{p.name}</span>
-                <span style={{ display: 'block', fontSize: '11.5px', color: t.textSoft }}>{p.desc}</span>
+                <span style={{ display: 'block', fontSize: '11px', color: t.textSoft }}>{p.desc}</span>
               </span>
               {on && <Check size={18} color={t.lavender} />}
             </button>
@@ -1849,13 +1849,13 @@ function EditEntryModal({ entry, onSave, onClose, t }) {
   const [date, setDate] = useState(entry.date);
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,74,0.45)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }} onClick={onClose}>
-      <div className="pop-card" style={{ background: t.card, borderRadius: '24px', padding: '24px', maxWidth: '340px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
-        <div className="display" style={{ fontSize: '18px', fontWeight: 700, color: t.text, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}><Pencil size={18} color={t.lavender} /> Correggi voce</div>
+      <div className="pop-card" style={{ background: t.card, borderRadius: '20px', padding: '24px', maxWidth: '340px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+        <div className="display" style={{ fontSize: '17px', fontWeight: 700, color: t.text, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}><Pencil size={18} color={t.lavender} /> Correggi voce</div>
         <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '16px' }}>{entry.snapshotName}</div>
         <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>Punti</div>
-        <input type="number" value={points} onChange={(e) => setPoints(Number(e.target.value) || 0)} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '15px', marginBottom: '12px', fontWeight: 700 }} />
+        <input type="number" value={points} onChange={(e) => setPoints(Number(e.target.value) || 0)} style={{ width: '100%', padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '15px', marginBottom: '12px', fontWeight: 700 }} />
         <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>Data</div>
-        <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '16px' }} />
+        <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '16px' }} />
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={onClose} style={{ background: t.line, border: 'none', color: t.textSoft, borderRadius: '12px', padding: '12px 16px', fontWeight: 700, cursor: 'pointer' }}>Annulla</button>
           <button
@@ -1877,13 +1877,13 @@ function GoalEditModal({ current, onSave, onClose, t }) {
   const [deadline, setDeadline] = useState(current?.deadline || '');
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,74,0.45)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }} onClick={onClose}>
-      <div className="pop-card" style={{ background: t.card, borderRadius: '24px', padding: '24px', maxWidth: '340px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
-        <div className="display" style={{ fontSize: '18px', fontWeight: 700, color: t.text, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}><Target size={20} color={t.lavender} /> Obiettivo di coppia</div>
+      <div className="pop-card" style={{ background: t.card, borderRadius: '20px', padding: '24px', maxWidth: '340px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+        <div className="display" style={{ fontSize: '17px', fontWeight: 700, color: t.text, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}><Target size={20} color={t.lavender} /> Obiettivo di coppia</div>
         <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '16px' }}>Punti da raggiungere insieme.</div>
         <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>Punti obiettivo</div>
-        <input type="number" value={target} onChange={(e) => setTarget(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '15px', marginBottom: '12px', fontWeight: 700 }} />
+        <input type="number" value={target} onChange={(e) => setTarget(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '15px', marginBottom: '12px', fontWeight: 700 }} />
         <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>Scadenza (opzionale)</div>
-        <input type="date" value={deadline} min={todayStr()} onChange={(e) => setDeadline(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '16px' }} />
+        <input type="date" value={deadline} min={todayStr()} onChange={(e) => setDeadline(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '16px' }} />
         <div style={{ display: 'flex', gap: '8px' }}>
           {current && <button onClick={() => onSave(null, null)} style={{ background: '#FFE5E5', border: 'none', color: '#C0392B', borderRadius: '12px', padding: '12px', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>Rimuovi</button>}
           <button onClick={() => onSave(target, deadline || null)} style={{ flex: 1, background: t.mint, border: 'none', color: '#fff', borderRadius: '12px', padding: '12px', fontWeight: 700, cursor: 'pointer' }}>Salva obiettivo</button>
@@ -1897,7 +1897,7 @@ function ToggleRow({ label, value, onChange, t, last }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: last ? 'none' : `1px solid ${t.line}` }}>
       <span style={{ fontSize: '14px', fontWeight: 700, color: t.text }}>{label}</span>
-      <button onClick={onChange} style={{ width: '48px', height: '28px', borderRadius: '14px', border: 'none', cursor: 'pointer', background: value ? t.mint : t.line, position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+      <button onClick={onChange} style={{ width: '48px', height: '28px', borderRadius: '16px', border: 'none', cursor: 'pointer', background: value ? t.mint : t.line, position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
         <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '3px', left: value ? '23px' : '3px', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
       </button>
     </div>
@@ -1932,11 +1932,11 @@ function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, onLogSubtas
     };
     return (
       <div className="pop-card" style={{ background: t.card, borderRadius: t.radiusSm, padding: '14px', boxShadow: '0 6px 16px rgba(45,42,74,0.1)' }}>
-        <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, marginBottom: '8px', fontSize: '14px', fontFamily: 'inherit', fontWeight: 700 }} />
+        <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, marginBottom: '8px', fontSize: '14px', fontFamily: 'inherit', fontWeight: 700 }} />
         <EmojiPicker options={CHORE_EMOJIS} value={draft.emoji} onChange={(em) => setDraft({ ...draft, emoji: em })} t={t} />
         <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-          <input type="number" min="1" value={draft.points} onChange={(e) => setDraft({ ...draft, points: Math.max(1, Number(e.target.value) || 0) })} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px' }} />
-          <select value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px' }}>{(categories || CATEGORIES).map((c) => <option key={c}>{c}</option>)}</select>
+          <input type="number" min="1" value={draft.points} onChange={(e) => setDraft({ ...draft, points: Math.max(1, Number(e.target.value) || 0) })} style={{ flex: 1, padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px' }} />
+          <select value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} style={{ flex: 1, padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px' }}>{(categories || CATEGORIES).map((c) => <option key={c}>{c}</option>)}</select>
         </div>
         {/* Ricorrenza */}
         <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -1960,26 +1960,26 @@ function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, onLogSubtas
             <div key={sub.id} style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px' }}>
               <input value={sub.emoji || ''} onChange={(e) => {
                 const subtasks = [...(draft.subtasks || [])]; subtasks[i] = { ...sub, emoji: e.target.value }; setDraft({ ...draft, subtasks });
-              }} style={{ width: '48px', padding: '9px', borderRadius: '9px', border: `1px solid ${t.line}`, fontSize: '18px', textAlign: 'center' }} placeholder="🔧" />
+              }} style={{ width: '48px', padding: '9px', borderRadius: '8px', border: `1px solid ${t.line}`, fontSize: '17px', textAlign: 'center' }} placeholder="🔧" />
               <input value={sub.name} placeholder="Es. Pulizia filtri" onChange={(e) => {
                 const subtasks = [...(draft.subtasks || [])]; subtasks[i] = { ...sub, name: e.target.value }; setDraft({ ...draft, subtasks });
-              }} style={{ flex: 1, padding: '9px', borderRadius: '9px', border: `1px solid ${t.line}`, fontSize: '13px' }} />
+              }} style={{ flex: 1, padding: '9px', borderRadius: '8px', border: `1px solid ${t.line}`, fontSize: '13px' }} />
               <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                 <span style={{ fontSize: '13px', color: t.textSoft, fontWeight: 700 }}>+</span>
                 <input type="number" min="1" value={sub.points} onChange={(e) => {
                   const subtasks = [...(draft.subtasks || [])]; subtasks[i] = { ...sub, points: Math.max(1, Number(e.target.value) || 0) }; setDraft({ ...draft, subtasks });
-                }} style={{ width: '52px', padding: '9px', borderRadius: '9px', border: `1px solid ${t.line}`, fontSize: '13px', textAlign: 'center' }} />
+                }} style={{ width: '52px', padding: '9px', borderRadius: '8px', border: `1px solid ${t.line}`, fontSize: '13px', textAlign: 'center' }} />
               </div>
               <button onClick={() => setDraft({ ...draft, subtasks: (draft.subtasks || []).filter((x) => x.id !== sub.id) })} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', display: 'flex', padding: '6px' }}><X size={16} /></button>
             </div>
           ))}
-          <button onClick={() => setDraft({ ...draft, subtasks: [...(draft.subtasks || []), { id: 'sub-' + uid(), name: '', emoji: '', points: 3 }] })} style={{ background: 'transparent', border: `1.5px dashed ${t.line}`, color: t.textSoft, borderRadius: '9px', padding: '8px 12px', fontWeight: 700, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}><Plus size={14} /> Aggiungi sotto-task</button>
+          <button onClick={() => setDraft({ ...draft, subtasks: [...(draft.subtasks || []), { id: 'sub-' + uid(), name: '', emoji: '', points: 3 }] })} style={{ background: 'transparent', border: `1.5px dashed ${t.line}`, color: t.textSoft, borderRadius: '8px', padding: '8px 12px', fontWeight: 700, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}><Plus size={14} /> Aggiungi sotto-task</button>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-          <button onClick={onDelete} style={{ background: '#FFE5E5', border: 'none', color: '#C0392B', borderRadius: '10px', padding: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700, fontSize: '13px' }}><Trash2 size={15} /> Elimina</button>
-          <button onClick={() => onSave({ ...draft, subtasks: (draft.subtasks || []).filter((s) => s.name.trim()) })} style={{ flex: 1, background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Salva</button>
-          <button onClick={onEdit} style={{ background: t.line, border: 'none', color: t.textSoft, borderRadius: '10px', padding: '10px', cursor: 'pointer' }}><X size={16} /></button>
+          <button onClick={onDelete} style={{ background: '#FFE5E5', border: 'none', color: '#C0392B', borderRadius: '12px', padding: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700, fontSize: '13px' }}><Trash2 size={15} /> Elimina</button>
+          <button onClick={() => onSave({ ...draft, subtasks: (draft.subtasks || []).filter((s) => s.name.trim()) })} style={{ flex: 1, background: t.mint, border: 'none', color: '#fff', borderRadius: '12px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Salva</button>
+          <button onClick={onEdit} style={{ background: t.line, border: 'none', color: t.textSoft, borderRadius: '12px', padding: '10px', cursor: 'pointer' }}><X size={16} /></button>
         </div>
       </div>
     );
@@ -2008,7 +2008,7 @@ function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, onLogSubtas
       {subtasks.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${t.line}` }}>
           {subtasks.map((sub) => (
-            <button key={sub.id} onClick={() => onLogSubtask(sub)} className="wiggle" style={{ background: 'transparent', border: `1.5px solid ${t.line}`, borderRadius: '20px', padding: '6px 12px 6px 7px', fontSize: '12.5px', fontWeight: 700, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button key={sub.id} onClick={() => onLogSubtask(sub)} className="wiggle" style={{ background: 'transparent', border: `1.5px solid ${t.line}`, borderRadius: '20px', padding: '6px 12px 6px 7px', fontSize: '12px', fontWeight: 700, color: t.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <IconTile emoji={sub.emoji || chore.emoji} size={22} radius={7} />
               <span>{sub.name}</span>
               <span style={{ color: t.lavender, fontWeight: 800 }}>+{sub.points}</span>
@@ -2069,7 +2069,7 @@ function RewardsModal({ rewards, ctx, users, identity, t, onAdd, onRemove, onCla
             return (
               <div key={r.id} style={{ background: achieved && !r.claimed ? `linear-gradient(135deg, ${t.sunny}22, ${t.coral}22)` : (t.style === 'minimal' ? 'transparent' : (t.card)), border: `1.5px solid ${achieved && !r.claimed ? t.coral : t.line}`, borderRadius: t.radiusSm, padding: '14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ fontSize: '28px', opacity: r.claimed ? 0.4 : 1 }}>{r.emoji}</div>
+                  <div style={{ fontSize: '26px', opacity: r.claimed ? 0.4 : 1 }}>{r.emoji}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '14px', fontWeight: 800, color: t.text, textDecoration: r.claimed ? 'line-through' : 'none' }}>{r.title}</div>
                     <div style={{ fontSize: '11px', color: t.textSoft }}>{typeLabel(r)}</div>
@@ -2082,7 +2082,7 @@ function RewardsModal({ rewards, ctx, users, identity, t, onAdd, onRemove, onCla
                       <div style={{ height: '100%', width: `${pct}%`, background: achieved ? t.mint : t.lavender, borderRadius: '4px', transition: 'width 0.5s' }} />
                     </div>
                     {achieved ? (
-                      <button onClick={() => onClaim(r.id)} style={{ width: '100%', marginTop: '10px', background: t.coral, border: 'none', color: '#fff', borderRadius: '10px', padding: '10px', fontWeight: 800, cursor: 'pointer', fontSize: '13px' }}>🎉 Riscuoti ricompensa!</button>
+                      <button onClick={() => onClaim(r.id)} style={{ width: '100%', marginTop: '10px', background: t.coral, border: 'none', color: '#fff', borderRadius: '12px', padding: '10px', fontWeight: 800, cursor: 'pointer', fontSize: '13px' }}>🎉 Riscuoti ricompensa!</button>
                     ) : (
                       <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '6px', textAlign: 'right' }}>{pct}%</div>
                     )}
@@ -2096,24 +2096,24 @@ function RewardsModal({ rewards, ctx, users, identity, t, onAdd, onRemove, onCla
 
         {adding ? (
           <div style={{ background: t.style === 'minimal' ? 'transparent' : (t.card), border: `1px solid ${t.line}`, borderRadius: t.radiusSm, padding: '14px' }}>
-            <input placeholder="Es. Cena fuori a scelta" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '10px' }} />
+            <input placeholder="Es. Cena fuori a scelta" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '10px' }} />
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
               {REWARD_EMOJIS.map((em) => (
-                <button key={em} onClick={() => setForm({ ...form, emoji: em })} style={{ width: '36px', height: '36px', fontSize: '18px', borderRadius: '10px', border: form.emoji === em ? `2px solid ${t.coral}` : `1px solid ${t.line}`, background: 'transparent', cursor: 'pointer' }}>{em}</button>
+                <button key={em} onClick={() => setForm({ ...form, emoji: em })} style={{ width: '36px', height: '36px', fontSize: '17px', borderRadius: '12px', border: form.emoji === em ? `2px solid ${t.coral}` : `1px solid ${t.line}`, background: 'transparent', cursor: 'pointer' }}>{em}</button>
               ))}
             </div>
             <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>Condizione</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
               {[['points', 'Raggiungo un totale di punti'], ['couple', 'Raggiungiamo insieme dei punti'], ['weekly_win', 'Vinco la settimana']].map(([val, label]) => (
-                <button key={val} onClick={() => setForm({ ...form, type: val })} style={{ textAlign: 'left', padding: '10px', borderRadius: '10px', border: `1.5px solid ${form.type === val ? t.lavender : t.line}`, background: form.type === val ? (t.style === 'minimal' ? 'transparent' : `${t.lavender}11`) : 'transparent', color: t.text, fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>{label}</button>
+                <button key={val} onClick={() => setForm({ ...form, type: val })} style={{ textAlign: 'left', padding: '10px', borderRadius: '12px', border: `1.5px solid ${form.type === val ? t.lavender : t.line}`, background: form.type === val ? (t.style === 'minimal' ? 'transparent' : `${t.lavender}11`) : 'transparent', color: t.text, fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>{label}</button>
               ))}
             </div>
             {(form.type === 'points' || form.type === 'couple') && (
-              <input type="number" placeholder="Punti" value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '10px' }} />
+              <input type="number" placeholder="Punti" value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px', marginBottom: '10px' }} />
             )}
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setAdding(false)} style={{ background: t.line, border: 'none', color: t.textSoft, borderRadius: '10px', padding: '10px 14px', fontWeight: 700, cursor: 'pointer' }}>Annulla</button>
-              <button onClick={submit} style={{ flex: 1, background: t.mint, border: 'none', color: '#fff', borderRadius: '10px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Aggiungi ricompensa</button>
+              <button onClick={() => setAdding(false)} style={{ background: t.line, border: 'none', color: t.textSoft, borderRadius: '12px', padding: '10px 14px', fontWeight: 700, cursor: 'pointer' }}>Annulla</button>
+              <button onClick={submit} style={{ flex: 1, background: t.mint, border: 'none', color: '#fff', borderRadius: '12px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Aggiungi ricompensa</button>
             </div>
           </div>
         ) : (

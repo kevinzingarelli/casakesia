@@ -141,7 +141,7 @@ export default function ShareCard({ data, choresById, totals, streaks, t, season
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,74,0.6)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }} onClick={onClose}>
-      <div className="pop-card" style={{ background: t.card, borderRadius: '24px', padding: '20px', maxWidth: '340px', width: '100%', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+      <div className="pop-card" style={{ background: t.card, borderRadius: '20px', padding: '20px', maxWidth: '340px', width: '100%', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} style={{ position: 'absolute', top: '12px', right: '12px', background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', zIndex: 2 }}><X size={20} /></button>
         <div className="display" style={{ fontSize: '17px', fontWeight: 700, color: t.text, marginBottom: '12px', textAlign: 'center' }}>Condividi la settimana</div>
         <canvas ref={canvasRef} style={{ display: 'none' }} />

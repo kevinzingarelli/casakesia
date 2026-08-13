@@ -19,10 +19,10 @@ function Shell({ children }) {
       `}</style>
       <div style={{ width: '100%', maxWidth: '380px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '28px' }}>
-          <div style={{ width: 44, height: 44, borderRadius: '13px', background: `linear-gradient(145deg, ${t.coral}, ${t.lavender})`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 10px rgba(0,0,0,0.15)' }}>
+          <div style={{ width: 44, height: 44, borderRadius: '12px', background: `linear-gradient(145deg, ${t.coral}, ${t.lavender})`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 10px rgba(0,0,0,0.15)' }}>
             <Home size={24} color="#fff" strokeWidth={2.3} />
           </div>
-          <div style={{ fontFamily: t.fontDisplay, fontSize: '24px', fontWeight: t.displayWeight, color: t.text }}>Casa Points</div>
+          <div style={{ fontFamily: t.fontDisplay, fontSize: '22px', fontWeight: t.displayWeight, color: t.text }}>Casa Points</div>
         </div>
         {children}
       </div>
@@ -49,7 +49,7 @@ function PrimaryButton({ children, busy, ...props }) {
 
 function ErrorBox({ msg }) {
   if (!msg) return null;
-  return <div style={{ background: '#FFEBEE', color: '#C62828', fontSize: '13px', borderRadius: '10px', padding: '10px 12px', marginBottom: '12px' }}>{msg}</div>;
+  return <div style={{ background: '#FFEBEE', color: '#C62828', fontSize: '13px', borderRadius: '12px', padding: '10px 12px', marginBottom: '12px' }}>{msg}</div>;
 }
 
 export function SplashScreen() {
@@ -96,14 +96,14 @@ export function AuthScreen() {
   return (
     <Shell>
       <div style={{ background: t.card, borderRadius: t.radius, padding: '22px', boxShadow: t.shadow }}>
-        <div style={{ fontFamily: t.fontDisplay, fontSize: '18px', fontWeight: 700, color: t.text, marginBottom: '4px' }}>
+        <div style={{ fontFamily: t.fontDisplay, fontSize: '17px', fontWeight: 700, color: t.text, marginBottom: '4px' }}>
           {mode === 'login' ? 'Bentornato' : 'Crea il tuo account'}
         </div>
         <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '18px' }}>
           {mode === 'login' ? 'Accedi per ritrovare la tua casa.' : 'Un account per te: dopo potrai creare una casa nuova o unirti a quella del tuo partner.'}
         </div>
         <ErrorBox msg={error} />
-        {info && <div style={{ background: '#E8F5E9', color: '#2E7D32', fontSize: '13px', borderRadius: '10px', padding: '10px 12px', marginBottom: '12px' }}>{info}</div>}
+        {info && <div style={{ background: '#E8F5E9', color: '#2E7D32', fontSize: '13px', borderRadius: '12px', padding: '10px 12px', marginBottom: '12px' }}>{info}</div>}
         <form onSubmit={submit}>
           <Field icon={Mail} type="email" autoComplete="email" placeholder="La tua email" value={email} onChange={(e) => setEmail(e.target.value)} />
           <Field icon={Lock} type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -204,14 +204,14 @@ export function HouseholdSetupScreen() {
         <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '18px' }}>Crea la vostra casa, oppure unisciti a quella che ha già creato il tuo partner.</div>
         <ErrorBox msg={error} />
         <button onClick={doCreate} disabled={busy} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', background: t.bg, border: `1.5px solid ${t.line}`, borderRadius: t.radiusSm, padding: '14px', cursor: 'pointer', marginBottom: '10px', textAlign: 'left' }}>
-          <div style={{ width: 38, height: 38, borderRadius: '11px', background: `linear-gradient(145deg, ${t.coral}, #FF8A5C)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Home size={19} color="#fff" /></div>
+          <div style={{ width: 38, height: 38, borderRadius: '12px', background: `linear-gradient(145deg, ${t.coral}, #FF8A5C)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Home size={19} color="#fff" /></div>
           <div>
             <div style={{ fontWeight: 700, fontSize: '14px', color: t.text }}>Crea una nuova casa</div>
             <div style={{ fontSize: '12px', color: t.textSoft }}>Sei il primo dei due a registrarti</div>
           </div>
         </button>
         <button onClick={() => setChoice('join')} disabled={busy} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', background: t.bg, border: `1.5px solid ${t.line}`, borderRadius: t.radiusSm, padding: '14px', cursor: 'pointer', textAlign: 'left' }}>
-          <div style={{ width: 38, height: 38, borderRadius: '11px', background: `linear-gradient(145deg, ${t.lavender}, #8B5CF6)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Users size={19} color="#fff" /></div>
+          <div style={{ width: 38, height: 38, borderRadius: '12px', background: `linear-gradient(145deg, ${t.lavender}, #8B5CF6)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Users size={19} color="#fff" /></div>
           <div>
             <div style={{ fontWeight: 700, fontSize: '14px', color: t.text }}>Ho un codice d'invito</div>
             <div style={{ fontSize: '12px', color: t.textSoft }}>Il tuo partner ha già creato la casa</div>

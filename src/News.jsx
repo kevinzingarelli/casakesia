@@ -53,7 +53,7 @@ export function UpdateBanner({ t, onOpenNews }) {
         <button onClick={onOpenNews} style={{ background: 'none', border: 'none', padding: 0, fontSize: '12px', color: t.textSoft, cursor: 'pointer', textDecoration: 'underline' }}>Guarda cosa cambia</button>
       </div>
       <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-        <button onClick={() => window.location.reload()} style={{ background: t.coral, border: 'none', color: '#fff', borderRadius: '10px', padding: '9px 12px', fontWeight: 800, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}><RefreshCw size={14} /> Aggiorna</button>
+        <button onClick={() => window.location.reload()} style={{ background: t.coral, border: 'none', color: '#fff', borderRadius: '12px', padding: '9px 12px', fontWeight: 800, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}><RefreshCw size={14} /> Aggiorna</button>
         <button onClick={() => setDismissed(true)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '6px' }}><X size={16} /></button>
       </div>
     </div>
@@ -74,7 +74,7 @@ export function NewsModal({ t, dark, onClose, onReadChange }) {
       <div className="picker-sheet" style={{ background: t.card, width: '100%', borderRadius: '28px 28px 0 0', padding: '22px 20px calc(22px + env(safe-area-inset-bottom))', maxHeight: '88vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
           <Sparkles size={20} color={t.lavender} />
-          <div className="display" style={{ fontSize: '18px', fontWeight: 800, color: t.text, flex: 1 }}>Novità dell'app</div>
+          <div className="display" style={{ fontSize: '17px', fontWeight: 800, color: t.text, flex: 1 }}>Novità dell'app</div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><X size={22} /></button>
         </div>
         <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '16px' }}>
@@ -95,13 +95,13 @@ export function NewsModal({ t, dark, onClose, onReadChange }) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="display" style={{ fontSize: '15px', fontWeight: 800, color: t.text }}>
                       {v.title}
-                      {isCurrent && <span style={{ fontSize: '10px', background: t.mint, color: '#fff', borderRadius: '6px', padding: '2px 6px', marginLeft: '6px', fontWeight: 800, verticalAlign: 'middle' }}>in uso</span>}
+                      {isCurrent && <span style={{ fontSize: '10px', background: t.mint, color: '#fff', borderRadius: '8px', padding: '2px 6px', marginLeft: '6px', fontWeight: 800, verticalAlign: 'middle' }}>in uso</span>}
                     </div>
                     <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '2px' }}>
                       Versione {v.version} · {parseLocalDate(v.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })} alle {v.time}
                     </div>
                   </div>
-                  <button onClick={() => toggle(v.version)} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: read ? t.mint : 'transparent', border: `1.5px solid ${read ? t.mint : t.line}`, color: read ? '#fff' : t.textSoft, borderRadius: '10px', padding: '6px 9px', fontSize: '11px', fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}>
+                  <button onClick={() => toggle(v.version)} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: read ? t.mint : 'transparent', border: `1.5px solid ${read ? t.mint : t.line}`, color: read ? '#fff' : t.textSoft, borderRadius: '12px', padding: '6px 9px', fontSize: '11px', fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}>
                     <div style={{ width: '14px', height: '14px', borderRadius: '4px', border: `1.5px solid ${read ? '#fff' : t.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {read && <Check size={10} color="#fff" />}
                     </div>
