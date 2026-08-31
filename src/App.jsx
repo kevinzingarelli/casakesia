@@ -105,6 +105,10 @@ function App({ householdId, household, onSignOut }) {
   const [removingIds, setRemovingIds] = useState([]);
   const [undoToast, setUndoToast] = useState(null); // { ids, label } — lavoro appena segnato, ancora annullabile
   const undoTimerRef = useRef(null);
+  // Blocca il doppio invio: due tocchi rapidissimi su "L'ho fatto io"
+  // registravano il lavoro due volte (il foglio non fa in tempo a chiudersi
+  // fra il primo e il secondo tocco). Trovato provando l'app il 14/08/2026.
+  const pickerSubmitting = useRef(false);
   const [editingEntry, setEditingEntry] = useState(null); // voce di storico in modifica
   const [recuperabile, setRecuperabile] = useState(null); // { copia, mancanti } — storico sparito dal server ma ancora qui
   const [recuperoInCorso, setRecuperoInCorso] = useState(false);
@@ -513,6 +517,8 @@ function App({ householdId, household, onSignOut }) {
   // selections: array di 'parent' | subtask.id
   const logSelection = (chore, selections, user, count = 1, dateStr = todayStr(), dedicate = false) => {
     if (!selections || selections.length === 0) return;
+    if (pickerSubmitting.current) return;   // secondo tocco arrivato prima della chiusura del foglio
+    pickerSubmitting.current = true;
     const isToday = dateStr === todayStr();
     const baseTime = isToday ? new Date() : new Date(`${dateStr}T12:00:00`);
     const hasSubtasks = (chore.subtasks || []).length > 0;
@@ -846,6 +852,7 @@ function App({ householdId, household, onSignOut }) {
   };
 
   const handleChoreClick = (chore) => {
+    pickerSubmitting.current = false;       // foglio nuovo, invio di nuovo permesso
     setPickerCount(1); setPickerDate(todayStr()); setPickerDedicate(false);
     // Se il task ha sotto-task, default: solo il genitore selezionato
     // Se non ha sotto-task, selezione implicita del genitore
@@ -856,6 +863,7 @@ function App({ householdId, household, onSignOut }) {
   // Tocco diretto su una sotto-task dalla lista: apre la conferma con SOLO
   // quella selezionata, senza il lavoro principale.
   const handleSubtaskClick = (chore, sub) => {
+    pickerSubmitting.current = false;
     setPickerCount(1); setPickerDate(todayStr()); setPickerDedicate(false);
     setPickerSelections([sub.id]);
     setPickerChore(chore);
