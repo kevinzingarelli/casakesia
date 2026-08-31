@@ -7,9 +7,19 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '21';
+export const CURRENT_VERSION = '22';
 
 export const CHANGELOG = [
+  {
+    version: '22',
+    date: '2026-08-14',
+    time: '23:20',
+    title: 'Due protezioni sui tocchi',
+    items: [
+      'Un doppio tocco veloce su "L\'ho fatto io" non registra più il lavoro due volte (prima raddoppiava i punti senza che ve ne accorgeste)',
+      'Il cestino nello Storico ora chiede conferma dicendo cosa state per eliminare e di chi è — prima un tocco sbagliato cancellava all\'istante anche i lavori dell\'altro, senza rimedio',
+    ],
+  },
   {
     version: '21',
     date: '2026-08-14',

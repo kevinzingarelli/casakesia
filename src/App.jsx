@@ -594,6 +594,16 @@ function App({ householdId, household, onSignOut }) {
   };
 
   const removeEntry = (id) => {
+    // Conferma prima di cancellare: un tocco accidentale sul cestino
+    // eliminava all'istante anche i lavori del PARTNER, senza rimedio
+    // (successo davvero provando l'app il 14/08/2026). Il messaggio dice
+    // cosa si sta buttando, così la conferma è informata e non un riflesso.
+    const entry = dataRef.current.log.find((e) => e.id === id);
+    if (entry) {
+      const who = dataRef.current.users.find((u) => u.id === entry.userId)?.name || '?';
+      const info = choreNameForEntry(entry, choresById);
+      if (!window.confirm(`Eliminare "${info.name}" di ${who} (${pointsForEntry(entry, choresById)} punti)?`)) return;
+    }
     setRemovingIds((ids) => [...ids, id]);
     vibrate(10);
     setTimeout(() => {
