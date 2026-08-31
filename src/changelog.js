@@ -7,9 +7,21 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '22';
+export const CURRENT_VERSION = '23';
 
 export const CHANGELOG = [
+  {
+    version: '23',
+    date: '2026-08-14',
+    time: '23:30',
+    title: 'L\'app sa chi sei, e la password si può recuperare',
+    items: [
+      'Al primo accesso l\'app chiede "Come ti chiami?" una volta sola e lega il nome al tuo account: da lì in poi ti riconosce su qualsiasi telefono, senza più "Persona 1 o Persona 2?"',
+      'Per Kevin e Asia è già tutto collegato: non vedrete nessuna schermata in più',
+      'Nella schermata di accesso c\'è finalmente "Password dimenticata?": arriva un\'email con il link per sceglierne una nuova',
+      'Nelle Opzioni, la sezione "identità" mostra chi sei invece di chiederti di sceglierlo',
+    ],
+  },
   {
     version: '22',
     date: '2026-08-14',

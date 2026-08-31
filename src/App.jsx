@@ -6,7 +6,7 @@ import {
   Search, Gift, Bell, Repeat, Bookmark, Sparkle as SparkleIcon, Star, Music, Copy,
 } from 'lucide-react';
 import { supabase, TABLE } from './supabaseClient';
-import { AuthScreen, HouseholdSetupScreen, SplashScreen } from './Auth';
+import { AuthScreen, HouseholdSetupScreen, SplashScreen, NewPasswordScreen } from './Auth';
 import {
   theme, USER_COLORS, CHORE_EMOJIS, CATEGORIES,
   DEFAULT_CHORES, DEFAULT_USERS, LEVELS, ACHIEVEMENTS,
@@ -72,7 +72,7 @@ function saveLS(key, val) { try { localStorage.setItem(key, JSON.stringify(val))
 // query string non cambia durante la vita della pagina.
 const isDemo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1';
 
-function App({ householdId, household, onSignOut }) {
+function App({ householdId, household, onSignOut, authUserId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('home');
@@ -506,10 +506,38 @@ function App({ householdId, household, onSignOut }) {
     return wk;
   }, [data, choresById]);
 
+  // Chi sono io: prima di tutto per account (authId scritto sull'utente al
+  // primo accesso — vale su OGNI dispositivo, senza doverlo ridire), poi
+  // come ripiego per la scelta manuale salvata sul telefono (dati vecchi).
   const me = useMemo(() => {
-    if (!data || !identity) return null;
+    if (!data) return null;
+    if (authUserId) {
+      const byAuth = data.users.find((u) => u.authId === authUserId);
+      if (byAuth) return byAuth;
+    }
+    if (!identity) return null;
     return data.users.find((u) => u.id === identity) || null;
-  }, [data, identity]);
+  }, [data, identity, authUserId]);
+
+  // Serve la schermata "Come ti chiami?"? Solo con un account vero, dati
+  // caricati, nessun utente già legato a questo account e un posto libero.
+  const slotLibero = useMemo(() => {
+    if (isDemo || !authUserId || !data) return null;
+    if (data.users.some((u) => u.authId === authUserId)) return null;
+    return data.users.find((u) => !u.authId) || null;
+  }, [data, authUserId]);
+
+  const claimIdentity = (nome) => {
+    if (!slotLibero) return;
+    const pulito = (nome || '').trim();
+    save({
+      ...dataRef.current,
+      users: dataRef.current.users.map((u) =>
+        u.id === slotLibero.id ? { ...u, name: pulito || u.name, authId: authUserId } : u
+      ),
+    });
+    setIdentity(slotLibero.id); // coerenza col vecchio meccanismo sul telefono
+  };
 
   const otherUser = me && data ? data.users.find((u) => u.id !== me.id) : null;
 
@@ -878,6 +906,13 @@ function App({ householdId, household, onSignOut }) {
     setPickerSelections([sub.id]);
     setPickerChore(chore);
   };
+
+  if (!loading && data && slotLibero) {
+    // Prima volta con questo account: chiede il nome UNA volta e lo lega
+    // all'account. Da qui in poi, su qualunque dispositivo, l'app sa chi
+    // sei senza chiedere "Persona 1 o Persona 2?".
+    return <ClaimNameScreen slot={slotLibero} t={t} dark={dark} onConfirm={claimIdentity} />;
+  }
 
   if (loading || !data) {
     // Scheletro che ricalca la sagoma della Home (duello punti + azioni
@@ -1591,7 +1626,7 @@ function App({ householdId, household, onSignOut }) {
       {/* ===== IMPOSTAZIONI ===== */}
       {tab === 'settings' && (
         <SettingsView
-          data={data} me={me} identity={identity} setIdentity={setIdentity} updateUser={updateUser}
+          data={data} me={me} identity={identity} setIdentity={setIdentity} updateUser={updateUser} authBound={!!(me && authUserId && me.authId === authUserId)}
           soundOn={soundOn} setSoundOn={setSoundOn} dark={dark} setDark={setDark} seasonal={seasonal} setSeasonal={setSeasonal}
           style={style} setStyle={setStyle}
           exportCSV={exportCSV} resetHistory={resetHistory} t={t} cardShadow={cardShadow} season={season}
@@ -1671,7 +1706,46 @@ function App({ householdId, household, onSignOut }) {
 // COMPONENTI AUSILIARI
 // ============================================================
 
-function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, style, setStyle, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, renameCategory, removeCategory, choresUsingCategory, penaltiesOn, togglePenalties, vacations, setVacation, onOpenRewards, onOpenSavedQuotes, savedCount, onOpenWidgetPreview, soundPack, setSoundPack, onOpenNews, unreadNews, pushSub, pushBusy, pushMsg, onEnablePush, onDisablePush, household, onSignOut }) {
+/**
+ * Primo accesso di un account: chiede il nome e lo lega all'account.
+ * Se il posto libero ha già un nome vero (non "Persona 1/2"), lo propone
+ * precompilato: basta confermare.
+ */
+function ClaimNameScreen({ slot, t, dark, onConfirm }) {
+  const placeholder = /^Persona [12]$/.test(slot.name);
+  const [nome, setNome] = useState(placeholder ? '' : slot.name);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div style={{ minHeight: '100vh', background: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: t.font }}>
+      <div style={{ width: '100%', maxWidth: '380px', background: t.card, borderRadius: t.radius, padding: '24px', boxShadow: t.shadow, textAlign: 'center' }}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', background: `linear-gradient(145deg, ${slot.color}, ${slot.color}CC)`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', color: '#fff', fontWeight: 800, fontSize: '24px' }}>
+          {(nome.trim() || '?').charAt(0).toUpperCase()}
+        </div>
+        <div className="display" style={{ fontFamily: t.fontDisplay, fontSize: '20px', fontWeight: t.displayWeight, color: t.text, marginBottom: '6px' }}>Come ti chiami?</div>
+        <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '18px', lineHeight: 1.45 }}>
+          È il nome che vedrà il tuo partner. Lo chiedo una volta sola: da adesso l'app ti riconosce dall'account, su qualsiasi telefono.
+        </div>
+        <input
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          placeholder="Es. Giulia"
+          maxLength={20}
+          autoFocus
+          style={{ width: '100%', textAlign: 'center', fontSize: '17px', fontWeight: 700, border: `1.5px solid ${t.line}`, borderRadius: t.radiusSm, padding: '13px', marginBottom: '14px', color: t.text, background: t.bg, boxSizing: 'border-box', fontFamily: t.font }}
+        />
+        <button
+          onClick={() => { if (!nome.trim() || busy) return; setBusy(true); onConfirm(nome); }}
+          disabled={!nome.trim() || busy}
+          style={{ width: '100%', background: !nome.trim() || busy ? t.line : `linear-gradient(145deg, ${t.coral}, #FF8A5C)`, border: 'none', borderRadius: t.radiusSm, padding: '14px', color: '#fff', fontWeight: 700, fontSize: '15px', cursor: !nome.trim() || busy ? 'default' : 'pointer' }}
+        >
+          {busy ? 'Un attimo…' : 'Inizia'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SettingsView({ data, me, identity, setIdentity, updateUser, authBound, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, style, setStyle, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, renameCategory, removeCategory, choresUsingCategory, penaltiesOn, togglePenalties, vacations, setVacation, onOpenRewards, onOpenSavedQuotes, savedCount, onOpenWidgetPreview, soundPack, setSoundPack, onOpenNews, unreadNews, pushSub, pushBusy, pushMsg, onEnablePush, onDisablePush, household, onSignOut }) {
   const [newCat, setNewCat] = useState('');
   const [codeCopied, setCodeCopied] = useState(false);
   const customCats = data.customCategories || [];
@@ -1704,17 +1778,35 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, soundOn, se
         </>
       )}
 
-      {/* Identità */}
-      <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>La tua identità su questo telefono</div>
-      <div style={{ background: t.card, borderRadius: '20px', padding: '14px', boxShadow: cardShadow, marginBottom: '20px' }}>
-        <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '10px' }}>Scegli chi sei: i lavori che segni saranno automaticamente tuoi.</div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {data.users.map((u) => (
-            <button key={u.id} onClick={() => setIdentity(u.id)} style={{ flex: 1, background: identity === u.id ? u.color : 'transparent', border: `2px solid ${u.color}`, borderRadius: '12px', padding: '10px', color: identity === u.id ? '#fff' : u.color, fontWeight: 700, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>{u.name} {identity === u.id && <Check size={15} strokeWidth={3} />}</button>
-          ))}
-        </div>
-        {me && <button onClick={() => setIdentity(null)} style={{ width: '100%', marginTop: '8px', background: 'transparent', border: 'none', color: t.textSoft, fontSize: '12px', cursor: 'pointer' }}>Rimuovi identità</button>}
-      </div>
+      {/* Identità: scelta manuale solo come ripiego. Quando l'account è già
+          legato a un giocatore (authBound), scegliere qui non avrebbe alcun
+          effetto — il riconoscimento per account vince — quindi al suo posto
+          si mostra una riga che dice chi sei. */}
+      {authBound ? (
+        <>
+          <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Chi sei</div>
+          <div style={{ background: t.card, borderRadius: '20px', padding: '14px', boxShadow: cardShadow, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Avatar user={me} size={34} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: t.text }}>{me.name}</div>
+              <div style={{ fontSize: '12px', color: t.textSoft }}>Riconosciuto dal tuo account, su ogni telefono</div>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>La tua identità su questo telefono</div>
+          <div style={{ background: t.card, borderRadius: '20px', padding: '14px', boxShadow: cardShadow, marginBottom: '20px' }}>
+            <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '10px' }}>Scegli chi sei: i lavori che segni saranno automaticamente tuoi.</div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {data.users.map((u) => (
+                <button key={u.id} onClick={() => setIdentity(u.id)} style={{ flex: 1, background: identity === u.id ? u.color : 'transparent', border: `2px solid ${u.color}`, borderRadius: '12px', padding: '10px', color: identity === u.id ? '#fff' : u.color, fontWeight: 700, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>{u.name} {identity === u.id && <Check size={15} strokeWidth={3} />}</button>
+              ))}
+            </div>
+            {me && <button onClick={() => setIdentity(null)} style={{ width: '100%', marginTop: '8px', background: 'transparent', border: 'none', color: t.textSoft, fontSize: '12px', cursor: 'pointer' }}>Rimuovi identità</button>}
+          </div>
+        </>
+      )}
 
       {/* Giocatori */}
       <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Giocatori</div>
@@ -2204,38 +2296,62 @@ function SavedQuotesModal({ saved, t, onRemove, onClose }) {
 // ============================================================================
 function AppRoot() {
   const [state, setState] = useState(() => (isDemo ? { status: 'demo' } : { status: 'loading' }));
+  // Vero mentre l'utente sta scegliendo la nuova password (arrivato dal
+  // link dell'email di recupero): blocca i normali cambi di stato finché
+  // non ha finito, perché il link fa anche il login e senza questo blocco
+  // l'app lo porterebbe dritto in Home saltando la schermata.
+  const inRecovery = useRef(false);
 
   useEffect(() => {
     if (isDemo) return;
     let alive = true;
 
     const resolve = async (session) => {
+      if (inRecovery.current) return;
       if (!session) { if (alive) setState({ status: 'signed-out' }); return; }
       const { data: membership } = await supabase.from('household_members').select('household_id').eq('user_id', session.user.id).maybeSingle();
-      if (!alive) return;
+      if (!alive || inRecovery.current) return;
       if (!membership) { setState({ status: 'no-household' }); return; }
       const [{ data: hh }, { data: members }] = await Promise.all([
         supabase.from('households').select('id, invite_code').eq('id', membership.household_id).single(),
         supabase.from('household_members').select('user_id').eq('household_id', membership.household_id),
       ]);
-      if (!alive) return;
+      if (!alive || inRecovery.current) return;
       setState({
         status: 'ready',
         householdId: membership.household_id,
         household: { inviteCode: hh?.invite_code || null, memberCount: members?.length || 1 },
+        authUserId: session.user.id,
       });
     };
 
     supabase.auth.getSession().then(({ data }) => resolve(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => resolve(session));
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        inRecovery.current = true;
+        if (alive) setState({ status: 'recovery' });
+        return;
+      }
+      resolve(session);
+    });
     return () => { alive = false; sub.subscription.unsubscribe(); };
   }, []);
 
-  if (state.status === 'demo') return <App householdId={null} household={null} onSignOut={null} />;
+  if (state.status === 'demo') return <App householdId={null} household={null} onSignOut={null} authUserId={null} />;
   if (state.status === 'loading') return <SplashScreen />;
+  if (state.status === 'recovery') {
+    return <NewPasswordScreen onDone={() => {
+      inRecovery.current = false;
+      setState({ status: 'loading' });
+      supabase.auth.getSession().then(({ data }) => {
+        // ricalcola lo stato normale ora che la password è cambiata
+        window.location.reload();
+      });
+    }} />;
+  }
   if (state.status === 'signed-out') return <AuthScreen />;
   if (state.status === 'no-household') return <HouseholdSetupScreen />;
-  return <App householdId={state.householdId} household={state.household} onSignOut={() => supabase.auth.signOut()} />;
+  return <App householdId={state.householdId} household={state.household} onSignOut={() => supabase.auth.signOut()} authUserId={state.authUserId} />;
 }
 
 export default AppRoot;

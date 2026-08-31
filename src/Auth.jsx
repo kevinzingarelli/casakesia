@@ -61,7 +61,7 @@ export function SplashScreen() {
 }
 
 export function AuthScreen() {
-  const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const [mode, setMode] = useState('login'); // 'login' | 'signup' | 'reset'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -71,6 +71,22 @@ export function AuthScreen() {
   const submit = async (e) => {
     e.preventDefault();
     setError(null); setInfo(null);
+    if (mode === 'reset') {
+      if (!email.trim()) { setError('Inserisci la tua email.'); return; }
+      setBusy(true);
+      try {
+        // Il link nell'email riporta qui: supabase-js riconosce il token e
+        // AppRoot mostra la schermata "scegli la nuova password".
+        const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+        if (err) throw err;
+        setInfo('Fatto! Controlla la posta: trovi un link per scegliere una nuova password. Guarda anche nello spam.');
+      } catch (err) {
+        setError(err.message || 'Non sono riuscito a mandare l\'email.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (!email.trim() || !password) { setError('Inserisci email e password.'); return; }
     if (mode === 'signup' && password.length < 6) { setError('La password deve avere almeno 6 caratteri.'); return; }
     setBusy(true);
@@ -93,30 +109,84 @@ export function AuthScreen() {
     }
   };
 
+  const titles = {
+    login: ['Bentornato', 'Accedi per ritrovare la tua casa.'],
+    signup: ['Crea il tuo account', 'Un account per te: dopo potrai creare una casa nuova o unirti a quella del tuo partner.'],
+    reset: ['Password dimenticata', 'Ti mando un\'email con un link per sceglierne una nuova.'],
+  };
+
   return (
     <Shell>
       <div style={{ background: t.card, borderRadius: t.radius, padding: '22px', boxShadow: t.shadow }}>
-        <div style={{ fontFamily: t.fontDisplay, fontSize: '17px', fontWeight: 700, color: t.text, marginBottom: '4px' }}>
-          {mode === 'login' ? 'Bentornato' : 'Crea il tuo account'}
-        </div>
-        <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '18px' }}>
-          {mode === 'login' ? 'Accedi per ritrovare la tua casa.' : 'Un account per te: dopo potrai creare una casa nuova o unirti a quella del tuo partner.'}
-        </div>
+        <div style={{ fontFamily: t.fontDisplay, fontSize: '17px', fontWeight: 700, color: t.text, marginBottom: '4px' }}>{titles[mode][0]}</div>
+        <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '18px' }}>{titles[mode][1]}</div>
         <ErrorBox msg={error} />
         {info && <div style={{ background: '#E8F5E9', color: '#2E7D32', fontSize: '13px', borderRadius: '12px', padding: '10px 12px', marginBottom: '12px' }}>{info}</div>}
         <form onSubmit={submit}>
           <Field icon={Mail} type="email" autoComplete="email" placeholder="La tua email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <Field icon={Lock} type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          {mode !== 'reset' && (
+            <Field icon={Lock} type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          )}
           <div style={{ marginTop: '14px' }}>
             <PrimaryButton type="submit" busy={busy}>
-              {mode === 'login' ? <LogIn size={17} /> : <UserPlus size={17} />}
-              {mode === 'login' ? 'Accedi' : 'Registrati'}
+              {mode === 'login' ? <LogIn size={17} /> : mode === 'signup' ? <UserPlus size={17} /> : <Mail size={17} />}
+              {mode === 'login' ? 'Accedi' : mode === 'signup' ? 'Registrati' : 'Mandami il link'}
             </PrimaryButton>
           </div>
         </form>
-        <button onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(null); setInfo(null); }} style={{ width: '100%', marginTop: '14px', background: 'transparent', border: 'none', color: t.coral, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+        {mode === 'login' && (
+          <button onClick={() => { setMode('reset'); setError(null); setInfo(null); }} style={{ width: '100%', marginTop: '12px', background: 'transparent', border: 'none', color: t.textSoft, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+            Password dimenticata?
+          </button>
+        )}
+        <button onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(null); setInfo(null); }} style={{ width: '100%', marginTop: mode === 'login' ? '6px' : '14px', background: 'transparent', border: 'none', color: t.coral, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
           {mode === 'login' ? 'Non hai un account? Registrati' : 'Hai già un account? Accedi'}
         </button>
+      </div>
+    </Shell>
+  );
+}
+
+/**
+ * Schermata "scegli la nuova password": compare quando si arriva dall'email
+ * di recupero (AppRoot intercetta l'evento PASSWORD_RECOVERY di Supabase).
+ */
+export function NewPasswordScreen({ onDone }) {
+  const [pw1, setPw1] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    if (pw1.length < 6) { setError('La password deve avere almeno 6 caratteri.'); return; }
+    if (pw1 !== pw2) { setError('Le due password non coincidono.'); return; }
+    setBusy(true);
+    try {
+      const { error: err } = await supabase.auth.updateUser({ password: pw1 });
+      if (err) throw err;
+      onDone();
+    } catch (err) {
+      setError(err.message || 'Non sono riuscito a cambiare la password. Riprova dal link nell\'email.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Shell>
+      <div style={{ background: t.card, borderRadius: t.radius, padding: '22px', boxShadow: t.shadow }}>
+        <div style={{ fontFamily: t.fontDisplay, fontSize: '17px', fontWeight: 700, color: t.text, marginBottom: '4px' }}>Scegli la nuova password</div>
+        <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '18px' }}>Da adesso entrerai con questa.</div>
+        <ErrorBox msg={error} />
+        <form onSubmit={submit}>
+          <Field icon={Lock} type="password" autoComplete="new-password" placeholder="Nuova password" value={pw1} onChange={(e) => setPw1(e.target.value)} />
+          <Field icon={Lock} type="password" autoComplete="new-password" placeholder="Ripeti la nuova password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+          <div style={{ marginTop: '14px' }}>
+            <PrimaryButton type="submit" busy={busy}><Check size={17} /> Salva e continua</PrimaryButton>
+          </div>
+        </form>
       </div>
     </Shell>
   );
