@@ -163,6 +163,25 @@ export function SectionTitle({ icon: Icon, gradient = 'blue', children, t, style
   );
 }
 
+/**
+ * Schermata vuota curata: icona in tessera tenue + titolo + sottotitolo,
+ * al posto di una riga di testo grigio piatto. Stesso principio dei titoli
+ * di sezione — tinta al 14%, non a piena forza — così anche uno stato
+ * "non c'è ancora niente" sembra pensato e non un ripiego.
+ */
+export function EmptyState({ icon: Icon, gradient = 'blue', title, subtitle, t }) {
+  const [, c2] = GRADIENTS[gradient] || GRADIENTS.blue;
+  return (
+    <div style={{ background: t.card, borderRadius: t.radius, padding: '28px 20px', textAlign: 'center', boxShadow: t.shadow }}>
+      <div style={{ width: 52, height: 52, borderRadius: 16, background: `${c2}1f`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+        <Icon size={26} color={c2} strokeWidth={2} />
+      </div>
+      <div style={{ fontSize: '14px', fontWeight: 700, color: t.text, marginBottom: subtitle ? '4px' : 0 }}>{title}</div>
+      {subtitle && <div style={{ fontSize: '12px', color: t.textSoft, lineHeight: 1.4 }}>{subtitle}</div>}
+    </div>
+  );
+}
+
 // Traguardi individuali (id → icona + sfumatura)
 const ACHIEVEMENT_MAP = {
   first: [Target, 'red'],

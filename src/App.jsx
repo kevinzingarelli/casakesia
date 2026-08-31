@@ -23,7 +23,7 @@ import HouseSvg from './HouseSvg';
 import GiftsView from './GiftsView';
 import StreakView from './StreakView';
 import { NewsModal, UpdateBanner, useUnreadNews } from './News';
-import { IconTile, Avatar, SectionTitle, hasIcon } from './icons';
+import { IconTile, Avatar, SectionTitle, EmptyState, hasIcon } from './icons';
 
 // Caricate solo quando servono: Stats porta con sé tutta la libreria dei
 // grafici (recharts), che da sola pesa più di metà dell'app. Così il primo
@@ -862,9 +862,33 @@ function App({ householdId, household, onSignOut }) {
   };
 
   if (loading || !data) {
+    // Scheletro che ricalca la sagoma della Home (duello punti + azioni
+    // rapide), invece di un "Caricamento..." piatto: l'occhio riconosce
+    // subito la forma dell'app che sta per arrivare, non un vuoto.
+    const bone = (style) => <div style={{ background: t.line, borderRadius: '8px', animation: 'skeleton-pulse 1.3s ease-in-out infinite', ...style }} />;
     return (
-      <div style={{ background: t.bg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'sans-serif', color: t.textSoft }}>
-        Caricamento...
+      <div style={{ background: t.bg, minHeight: '100vh', padding: '18px', fontFamily: t.font }}>
+        <style>{`@keyframes skeleton-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }`}</style>
+        {bone({ width: '150px', height: '26px', marginBottom: '8px' })}
+        {bone({ width: '110px', height: '14px', marginBottom: '20px' })}
+        <div style={{ background: t.card, borderRadius: '24px', padding: '18px', marginBottom: '16px', display: 'flex', gap: '12px' }}>
+          {[0, 1].map((i) => (
+            <div key={i} style={{ flex: 1 }}>
+              {bone({ width: '70%', height: '15px', marginBottom: '10px' })}
+              {bone({ width: '50%', height: '26px', marginBottom: '10px' })}
+              {bone({ width: '100%', height: '10px' })}
+            </div>
+          ))}
+        </div>
+        {bone({ width: '130px', height: '15px', marginBottom: '12px' })}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} style={{ background: t.card, borderRadius: '18px', padding: '14px' }}>
+              {bone({ width: '40px', height: '40px', borderRadius: '12px', marginBottom: '10px' })}
+              {bone({ width: '80%', height: '13px' })}
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -1271,7 +1295,7 @@ function App({ householdId, household, onSignOut }) {
             <div className="slide-up" style={{ background: t.card, borderRadius: '20px', padding: '16px', boxShadow: cardShadow, marginBottom: '16px', borderLeft: `4px solid ${t.lavender}` }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, display: 'flex', alignItems: 'center', gap: '6px' }}><Target size={16} color={t.lavender} /> Obiettivo di coppia</div>
-                <button onClick={() => setShowGoalEdit(true)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', fontSize: '12px' }}><Pencil size={14} /></button>
+                <button onClick={() => setShowGoalEdit(true)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', fontSize: '12px', padding: '13px', margin: '-13px', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '40px', minHeight: '40px' }}><Pencil size={14} /></button>
               </div>
               <div style={{ fontSize: '13px', color: t.textSoft, marginBottom: '8px' }}>{coupleGoalProgress.current} / {coupleGoalProgress.target} punti insieme {coupleGoalProgress.deadline ? `entro ${parseLocalDate(coupleGoalProgress.deadline).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}` : ''}</div>
               <div style={{ height: '14px', background: t.line, borderRadius: '8px', overflow: 'hidden' }}>
@@ -1333,7 +1357,7 @@ function App({ householdId, household, onSignOut }) {
           {/* Ultime attività */}
           <SectionTitle icon={Clock} gradient="indigo" t={t}>Ultime attività</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {data.log.length === 0 && <div style={{ background: t.card, borderRadius: '16px', padding: '16px', color: t.textSoft, fontSize: '14px', textAlign: 'center' }}>Ancora nessuna attività. Tocca un lavoro per iniziare!</div>}
+            {data.log.length === 0 && <EmptyState icon={Clock} gradient="indigo" title="Ancora nessuna attività" subtitle="Tocca un lavoro qui sopra per iniziare" t={t} />}
             {data.log.slice(0, 6).map((e, i) => {
               const u = data.users.find((x) => x.id === e.userId);
               const info = choreNameForEntry(e, choresById);
@@ -1427,7 +1451,7 @@ function App({ householdId, household, onSignOut }) {
                 if (choreSearch && !c.name.toLowerCase().includes(choreSearch.toLowerCase())) return false;
                 return true;
               });
-              if (filtered.length === 0) return <div style={{ background: t.card, borderRadius: t.radius, padding: '16px', color: t.textSoft, fontSize: '14px', textAlign: 'center' }}>Nessun lavoro trovato.</div>;
+              if (filtered.length === 0) return <EmptyState icon={Search} gradient="gray" title="Nessun lavoro trovato" subtitle="Prova a cambiare la ricerca o la categoria" t={t} />;
               return filtered.map((c) => (
                 <ChoreRow key={c.id} chore={c} editing={editingChoreId === c.id} t={t} categories={allCategories} log={data.log}
                   onEdit={() => setEditingChoreId(editingChoreId === c.id ? null : c.id)}
@@ -1495,7 +1519,7 @@ function App({ householdId, household, onSignOut }) {
                 if (historySearch && !info.name.toLowerCase().includes(historySearch.toLowerCase())) return false;
                 return true;
               });
-              if (filtered.length === 0) return <div style={{ background: t.card, borderRadius: t.radius, padding: '16px', color: t.textSoft, fontSize: '14px', textAlign: 'center' }}>Nessuna attività trovata.</div>;
+              if (filtered.length === 0) return <EmptyState icon={Search} gradient="gray" title="Nessuna attività trovata" subtitle="Prova a cambiare filtro, persona o categoria" t={t} />;
               const groups = groupByDay(filtered);
               let idx = 0;
               return groups.map((g) => {
@@ -1521,8 +1545,8 @@ function App({ householdId, household, onSignOut }) {
                               <div style={{ fontSize: '12px', color: t.textSoft, display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: u?.color, display: 'inline-block' }} /> {u?.name} · {formatTime(e.timestamp)}{dedUser ? ` · per ${dedUser.name}` : ''}</div>
                             </div>
                             <div style={{ fontWeight: 800, color: u?.color }} className="display">+{pointsForEntry(e, choresById)}</div>
-                            <button onClick={() => setEditingEntry({ ...e, editPoints: pointsForEntry(e, choresById) })} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '4px' }}><Pencil size={15} /></button>
-                            <button onClick={() => removeEntry(e.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '4px' }}><Trash2 size={16} /></button>
+                            <button onClick={() => setEditingEntry({ ...e, editPoints: pointsForEntry(e, choresById) })} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '11px', margin: '-11px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '40px', minHeight: '40px' }}><Pencil size={15} /></button>
+                            <button onClick={() => removeEntry(e.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '11px', margin: '-11px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '40px', minHeight: '40px' }}><Trash2 size={16} /></button>
                           </div>
                         );
                       })}
@@ -2059,7 +2083,7 @@ function RewardsModal({ rewards, ctx, users, identity, t, onAdd, onRemove, onCla
         <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '16px' }}>Premi veri concordati tra voi. Quando raggiungi l'obiettivo, riscuoti! 🎉</div>
 
         {rewards.length === 0 && !adding && (
-          <div style={{ textAlign: 'center', padding: '20px', color: t.textSoft, fontSize: '14px' }}>Nessuna ricompensa ancora. Aggiungine una!</div>
+          <EmptyState icon={Gift} gradient="pink" title="Nessuna ricompensa ancora" subtitle="Aggiungine una qui sotto" t={t} />
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
@@ -2074,7 +2098,7 @@ function RewardsModal({ rewards, ctx, users, identity, t, onAdd, onRemove, onCla
                     <div style={{ fontSize: '14px', fontWeight: 800, color: t.text, textDecoration: r.claimed ? 'line-through' : 'none' }}>{r.title}</div>
                     <div style={{ fontSize: '11px', color: t.textSoft }}>{typeLabel(r)}</div>
                   </div>
-                  <button onClick={() => onRemove(r.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><Trash2 size={15} /></button>
+                  <button onClick={() => onRemove(r.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '11px', margin: '-11px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '40px', minHeight: '40px' }}><Trash2 size={15} /></button>
                 </div>
                 {!r.claimed && (
                   <>
@@ -2136,7 +2160,7 @@ function SavedQuotesModal({ saved, t, onRemove, onClose }) {
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><X size={22} /></button>
         </div>
         {saved.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '24px', color: t.textSoft, fontSize: '14px' }}>Nessuna citazione salvata.<br />Tocca il segnalibro sulla citazione del giorno per salvarla.</div>
+          <EmptyState icon={Bookmark} gradient="purple" title="Nessuna citazione salvata" subtitle="Tocca il segnalibro sulla citazione del giorno per salvarla" t={t} />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {saved.map((q, i) => (

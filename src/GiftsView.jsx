@@ -189,8 +189,8 @@ export default function GiftsView({
                     </div>
                   )}
                 </div>
-                <button onClick={() => openEdit(g)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '6px' }}><Pencil size={15} /></button>
-                <button onClick={() => onRemoveGift(g.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '6px' }}><Trash2 size={15} /></button>
+                <button onClick={() => openEdit(g)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '11px', margin: '-11px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '40px', minHeight: '40px' }}><Pencil size={15} /></button>
+                <button onClick={() => onRemoveGift(g.id)} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer', padding: '11px', margin: '-11px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '40px', minHeight: '40px' }}><Trash2 size={15} /></button>
                 <button onClick={() => openRequest(g)} disabled={!otherUser || exhausted} style={{ background: (!otherUser || exhausted) ? t.line : t.coral, border: 'none', color: (!otherUser || exhausted) ? t.textSoft : '#fff', borderRadius: '12px', padding: '10px 14px', fontWeight: 800, fontSize: '13px', cursor: (!otherUser || exhausted) ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
                   {exhausted ? 'Esaurito' : 'Chiedi'}
                 </button>

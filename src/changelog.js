@@ -7,9 +7,20 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '20';
+export const CURRENT_VERSION = '21';
 
 export const CHANGELOG = [
+  {
+    version: '21',
+    date: '2026-08-14',
+    time: '22:55',
+    title: 'Rifiniture: tocchi più facili e schermate più curate',
+    items: [
+      'I pulsanti matita e cestino (Storico, Regali, Ricompense, Obiettivo) ora hanno un\'area di tocco piena da 40 punti: prima erano così piccoli che capitava di mancarli o toccare quello sbagliato',
+      'Le schermate vuote ("nessuna attività", "nessun lavoro trovato"…) hanno ora un\'icona e un suggerimento su cosa fare, invece di una riga grigia',
+      'All\'apertura, al posto della scritta "Caricamento…" c\'è la sagoma della schermata che sta arrivando',
+    ],
+  },
   {
     version: '20',
     date: '2026-08-13',
