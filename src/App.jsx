@@ -988,7 +988,7 @@ function App({ householdId, household, onSignOut, authUserId }) {
   })();
 
   return (
-    <div style={{ background: t.bg, minHeight: '100vh', fontFamily: t.font, color: t.text, paddingBottom: 'calc(92px + env(safe-area-inset-bottom))', transition: 'background 0.4s' }}>
+    <div style={{ background: `linear-gradient(180deg, ${t.bgTop} 0%, ${t.bg} 320px)`, minHeight: '100vh', fontFamily: t.font, color: t.text, paddingBottom: 'calc(92px + env(safe-area-inset-bottom))', transition: 'background 0.4s' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap');
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -1021,12 +1021,19 @@ function App({ householdId, household, onSignOut, authUserId }) {
         .quick-card:active { transform: scale(0.94); }
         .nav-btn { transition: color 0.2s, transform 0.15s; }
         .nav-btn:active { transform: scale(0.85); }
-        button { font-family: inherit; }
+        button { font-family: inherit; transition: transform 0.15s ease; }
+        button:active { transform: scale(0.97); }
+        button:focus-visible, input:focus-visible { outline: 2px solid ${t.coral}; outline-offset: 2px; }
+        @media (prefers-reduced-motion: reduce) {
+          *, *::before, *::after { animation-duration: 0.001s !important; animation-iteration-count: 1 !important; transition-duration: 0.001s !important; }
+        }
         ::-webkit-scrollbar { display: none; }
         input, select { background: ${t.card}; color: ${t.text}; min-height: 44px; }
         input[type="date"] { min-height: 44px; }
         @keyframes slide-out { from { opacity: 1; transform: translateX(0); max-height: 80px; } to { opacity: 0; transform: translateX(40px); max-height: 0; margin: 0; padding-top: 0; padding-bottom: 0; } }
         .slide-out { animation: slide-out 0.28s ease-in forwards; overflow: hidden; }
+        @keyframes flame-risk { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.3); opacity: 0.75; } }
+        .flame-risk { animation: flame-risk 1.1s ease-in-out infinite; }
       `}</style>
 
       {error && <div style={{ background: '#FFE5E5', color: '#C0392B', fontSize: '12px', padding: '8px 16px', textAlign: 'center' }}>{error}</div>}
@@ -1208,7 +1215,7 @@ function App({ householdId, household, onSignOut, authUserId }) {
       <div style={{ padding: 'calc(20px + env(safe-area-inset-top)) 18px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
           <h1 className="display" style={{ fontSize: '26px', fontWeight: 800, margin: 0, color: t.text, letterSpacing: '-0.02em' }}>Casa Points</h1>
-          <p style={{ margin: '2px 0 0', color: t.textSoft, fontSize: '13px' }}>{me ? `Ciao ${me.name}!` : 'Dividetevi i lavori, raccogliete punti'}</p>
+          <p style={{ margin: '2px 0 0', color: t.textSoft, fontSize: '13px' }}>{me ? `Ciao ${me.name} · ${new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}` : 'Dividetevi i lavori, raccogliete punti'}</p>
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
           <button onClick={() => setShowNews(true)} className="nav-btn" style={{ position: 'relative', background: t.card, border: 'none', borderRadius: '12px', width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textSoft, cursor: 'pointer', boxShadow: cardShadow }}>
@@ -1280,29 +1287,35 @@ function App({ householdId, household, onSignOut, authUserId }) {
       {/* ===== HOME ===== */}
       {tab === 'home' && (
         <div className="fade-in" style={{ padding: '0 18px' }}>
-          {/* Score race */}
+          {/* Score race — il cuore visivo della Home: numeri da eroe, corona
+              a chi guida, barre col colore pieno del giocatore */}
           <div className="slide-up" style={{ background: t.card, borderRadius: '20px', padding: '18px', boxShadow: cardShadow, marginBottom: '16px' }}>
-            <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '14px' }}>
               {data.users.map((u) => {
                 const lvl = getLevel(totals[u.id] || 0);
+                const mine = totals[u.id] || 0;
+                const other = totals[data.users.find((x) => x.id !== u.id)?.id] || 0;
+                const leader = mine > other;                       // a pari punti nessuna corona
                 const maxRef = Math.max(totals[data.users[0].id] || 0, totals[data.users[1]?.id] || 0, 50);
-                const pct = Math.max(8, ((totals[u.id] || 0) / maxRef) * 100);
+                const pct = Math.max(8, (mine / maxRef) * 100);
                 const onVacation = data.vacations?.[u.id] && todayStr() >= data.vacations[u.id].from && todayStr() <= data.vacations[u.id].to;
+                const rischio = me && me.id === u.id && streakRisk;
                 return (
                   <div key={u.id} style={{ flex: 1 }}>
                     <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '7px', color: t.text }}>
                       <Avatar user={u} size={26} /> {u.name}
+                      {leader && <Crown size={15} color={t.sunny} fill={t.sunny} />}
                       {me && me.id === u.id && <span style={{ fontSize: '10px', background: u.color, color: '#fff', borderRadius: '8px', padding: '1px 5px' }}>tu</span>}
                     </div>
-                    <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '6px' }}>{lvl.title}</div>
-                    <div style={{ fontSize: '26px', fontWeight: 800, color: t.text }} className="display">{totals[u.id] || 0}</div>
-                    <div style={{ height: '10px', background: t.line, borderRadius: '8px', marginTop: '8px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${pct}%`, background: u.color, borderRadius: '8px', transition: 'width 0.6s cubic-bezier(0.34,1.56,0.64,1)' }} />
-                    </div>
+                    <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '4px' }}>{lvl.title}</div>
+                    <AnimatedNumber value={mine} className="display" style={{ fontSize: '30px', fontWeight: 800, color: t.text, lineHeight: 1.1 }} />
+                    <BarFill pct={pct} height={12} color={`linear-gradient(90deg, ${u.color}, ${u.color}CC)`} track={t.line} style={{ marginTop: '8px' }} />
                     {onVacation ? (
                       <div style={{ fontSize: '12px', marginTop: '6px', color: t.textSoft, display: 'flex', alignItems: 'center', gap: '4px' }}><Palmtree size={14} color={t.mint} /> in pausa</div>
                     ) : streaks[u.id] > 0 && (
-                      <button onClick={() => { setTab('progress'); setProgressSection('serie'); }} style={{ fontSize: '12px', marginTop: '6px', color: t.textSoft, display: 'flex', alignItems: 'center', gap: '4px', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}><Flame size={14} color={t.coral} /> {streaks[u.id]} {streaks[u.id] === 1 ? 'giorno' : 'giorni'}</button>
+                      <button onClick={() => { setTab('progress'); setProgressSection('serie'); }} style={{ fontSize: '12px', marginTop: '6px', color: rischio ? t.coral : t.textSoft, fontWeight: rischio ? 800 : 400, display: 'flex', alignItems: 'center', gap: '4px', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+                        <Flame size={14} color={t.coral} className={rischio ? 'flame-risk' : undefined} /> {streaks[u.id]} {streaks[u.id] === 1 ? 'giorno' : 'giorni'}{rischio ? ' — oggi ancora nulla!' : ''}
+                      </button>
                     )}
                   </div>
                 );
@@ -1370,9 +1383,7 @@ function App({ householdId, household, onSignOut, authUserId }) {
             <HouseSvg score={health.score} t={t} size={40} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '13px', fontWeight: 800, color: t.text }}>La casa è <span style={{ textTransform: 'capitalize' }}>{hState.label}</span></div>
-              <div style={{ height: '6px', background: t.line, borderRadius: '4px', overflow: 'hidden', marginTop: '6px' }}>
-                <div style={{ height: '100%', width: `${health.score}%`, background: health.color, borderRadius: '4px', transition: 'width 0.6s' }} />
-              </div>
+              <BarFill pct={health.score} height={6} color={health.color} track={t.line} style={{ marginTop: '6px' }} />
             </div>
           </div>
 
@@ -1705,6 +1716,51 @@ function App({ householdId, household, onSignOut, authUserId }) {
 // ============================================================
 // COMPONENTI AUSILIARI
 // ============================================================
+
+/**
+ * Numero che "conta" fino al valore nuovo invece di scattare: ~450ms con
+ * rallentamento finale. Se il sistema chiede meno movimento, salta al
+ * valore diretto. Il conteggio parte dal valore precedente, così un +10
+ * si VEDE salire di 10, non ricomincia da zero.
+ */
+function AnimatedNumber({ value, style, className }) {
+  const [shown, setShown] = useState(value);
+  const prev = useRef(value);
+  useEffect(() => {
+    const from = prev.current; prev.current = value;
+    if (from === value) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setShown(value); return; }
+    const t0 = performance.now(); const dur = 450;
+    let raf;
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setShown(Math.round(from + (value - from) * eased));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return <div className={className} style={style}>{shown}</div>;
+}
+
+/**
+ * Barra che si riempie da zero al primo apparire (e poi segue i cambi con
+ * la stessa molla). Un frame a 0 e poi la larghezza vera: la transizione
+ * CSS fa il resto.
+ */
+function BarFill({ pct, height = 10, color, track, style }) {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setW(pct));
+    return () => cancelAnimationFrame(raf);
+  }, [pct]);
+  return (
+    <div style={{ height: `${height}px`, background: track, borderRadius: `${height * 0.7}px`, overflow: 'hidden', ...style }}>
+      <div style={{ height: '100%', width: `${w}%`, background: color, borderRadius: `${height * 0.7}px`, transition: 'width 0.7s cubic-bezier(0.34,1.3,0.64,1)' }} />
+    </div>
+  );
+}
 
 /**
  * Primo accesso di un account: chiede il nome e lo lega all'account.

@@ -7,9 +7,22 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '23';
+export const CURRENT_VERSION = '24';
 
 export const CHANGELOG = [
+  {
+    version: '24',
+    date: '2026-09-01',
+    time: '08:58',
+    title: 'Più bella da guardare, più viva da usare',
+    items: [
+      'I punti nel duello ora CONTANO fino al numero nuovo invece di scattare, e le barre si riempiono con una molla morbida',
+      'Una corona segna chi è in testa, e la fiamma della serie pulsa la sera se non hai ancora segnato nulla (la serie è a rischio!)',
+      'Sfondo con una luce calda in alto, ombre più morbide e stratificate, numeri più grandi: la stessa app, con più cura',
+      'Ogni bottone ora risponde al tocco abbassandosi leggermente, e chi preferisce meno animazioni (impostazione del telefono) le vede ridotte',
+      'Nel saluto in alto c\'è la data di oggi',
+    ],
+  },
   {
     version: '23',
     date: '2026-08-14',

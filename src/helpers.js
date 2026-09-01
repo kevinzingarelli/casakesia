@@ -70,7 +70,8 @@ export function theme(dark, style = 'pop') {
       displayWeight: 600,
       radius: RADII.lg, radiusSm: RADII.md, radiusLg: RADII.xl,
       fs: FS, sp: SP, r: RADII,
-      shadow: dark ? '0 1px 3px rgba(0,0,0,0.6)' : '0 1px 2px rgba(0,0,0,0.04), 0 6px 20px rgba(0,0,0,0.05)',
+      shadow: dark ? '0 1px 2px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.35)' : '0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)',
+      bgTop: dark ? '#1C1B22' : '#FBF4EC',
       blur: 'saturate(180%) blur(20px)',
       navBg: dark ? 'rgba(28,28,30,0.78)' : 'rgba(255,255,255,0.78)',
     };
@@ -88,7 +89,8 @@ export function theme(dark, style = 'pop') {
     displayWeight: 700,
     radius: RADII.xl, radiusSm: RADII.lg, radiusLg: RADII.xl,
     fs: FS, sp: SP, r: RADII,
-    shadow: dark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(45,42,74,0.05)',
+    shadow: dark ? '0 1px 2px rgba(0,0,0,0.45), 0 10px 28px rgba(0,0,0,0.32)' : '0 1px 2px rgba(45,42,74,0.05), 0 10px 28px rgba(45,42,74,0.08)',
+    bgTop: dark ? '#211E31' : '#FFF1E0',
     blur: 'none',
     navBg: dark ? PALETTE.cardDark : PALETTE.card,
   };
