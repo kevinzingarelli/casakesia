@@ -534,6 +534,31 @@ export function computeBestStreak(log, userId, excused = {}) {
 }
 
 // Calcola quante settimane passate l'utente ha vinto (per il traguardo)
+/**
+ * Sfida della settimana: ogni lunedì l'app "estrae" una categoria (in modo
+ * deterministico dal numero della settimana, così i due telefoni vedono la
+ * stessa senza scriversi nulla) e vince chi ci fa più punti entro domenica.
+ * Non tocca i dati: si calcola tutto dallo storico.
+ */
+export function weeklyChallenge(log, choresById, categories, users) {
+  if (!categories || categories.length === 0 || !users || users.length < 2) return null;
+  const monday = startOfWeek();
+  const mondayStr = todayStr(monday);
+  const weekIndex = Math.floor(monday.getTime() / (7 * 86400000));
+  const category = categories[weekIndex % categories.length];
+  const points = {};
+  users.forEach((u) => { points[u.id] = 0; });
+  log.forEach((e) => {
+    if ((e.date || '') < mondayStr) return;
+    if (choreNameForEntry(e, choresById).category !== category) return;
+    points[e.userId] = (points[e.userId] || 0) + pointsForEntry(e, choresById);
+  });
+  const end = new Date(monday); end.setDate(end.getDate() + 6);
+  const oggi = parseLocalDate(todayStr());
+  const daysLeft = Math.max(0, Math.round((end - oggi) / 86400000));
+  return { category, points, daysLeft };
+}
+
 export function computeWeekWins(log, choresById, userId, otherId) {
   const weekMap = {}; // chiave: lunedì della settimana -> {userId: punti}
   log.forEach((e) => {

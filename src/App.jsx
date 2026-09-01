@@ -13,7 +13,7 @@ import {
   todayStr, formatDate, formatTime, getLevel, computeStreak,
   pointsForEntry, choreNameForEntry, achievementContext, uid, startOfWeek,
   houseHealth, motivationalMessage, currentSeason,
-  houseState, recurringStatus, rewardAchieved, recentChores, groupByDay, computeWeekWins,
+  houseState, recurringStatus, rewardAchieved, recentChores, groupByDay, computeWeekWins, weeklyChallenge,
   mergeData, sameData, cloneData, dedupeData, parseLocalDate, DEFAULT_GIFTS, giftDayLabel, giftRemaining,
 } from './helpers';
 import { playCompletionSound, playAchievementSound, playLevelUpSound, vibrate, playPackPreview, SOUND_PACKS, DEFAULT_PACK } from './sounds';
@@ -319,6 +319,27 @@ function App({ householdId, household, onSignOut, authUserId }) {
     save(unito);
     setRecuperabile(null);
     setRecuperoInCorso(false);
+  };
+
+  // "Bravo!": un tocco sul cuore di un lavoro del partner per fargli i
+  // complimenti. Si salva sull'elemento dello storico (campo cheers), la
+  // sincronizzazione lo porta sull'altro telefono, e parte una notifica.
+  const toggleCheer = (entryId) => {
+    if (!me) return;
+    const entry = dataRef.current.log.find((e) => e.id === entryId);
+    if (!entry || entry.userId === me.id) return;
+    const attuali = Array.isArray(entry.cheers) ? entry.cheers : [];
+    const aggiunto = !attuali.includes(me.id);
+    const log = dataRef.current.log.map((e) => {
+      if (e.id !== entryId) return e;
+      return { ...e, cheers: aggiunto ? [...attuali, me.id] : attuali.filter((x) => x !== me.id) };
+    });
+    save({ ...dataRef.current, log });
+    if (aggiunto) {
+      vibrate(15);
+      playCompletionSound(1, soundOn, soundPack);
+      sendPush({ householdId, toUserId: entry.userId, title: `${me.name} ti applaude! 👏`, message: `Per "${choreNameForEntry(entry, choresById).name}"`, url: '/', tag: 'bravo' }).catch(() => {});
+    }
   };
 
   const scheduleFlush = (delay) => {
@@ -947,6 +968,9 @@ function App({ householdId, household, onSignOut, authUserId }) {
   const motivation = me ? motivationalMessage(data.log, choresById, me.id, otherUser?.id, data.users) : null;
   const streakRisk = me && streaks[me.id] > 0 && !data.log.some((e) => e.userId === me.id && e.date === todayStr()) && new Date().getHours() >= 18;
 
+  // Sfida della settimana (categoria estratta dalla settimana, zero scritture)
+  const sfida = weeklyChallenge(data.log, choresById, allCategories, data.users);
+
   // Lavori ricorrenti in scadenza o scaduti
   const dueChores = data.chores
     .map((c) => ({ chore: c, rec: recurringStatus(c, data.log) }))
@@ -1024,6 +1048,8 @@ function App({ householdId, household, onSignOut, authUserId }) {
         @keyframes slide-out { from { opacity: 1; transform: translateX(0); max-height: 80px; } to { opacity: 0; transform: translateX(40px); max-height: 0; margin: 0; padding-top: 0; padding-bottom: 0; } }
         .slide-out { animation: slide-out 0.28s ease-in forwards; overflow: hidden; }
         @keyframes flame-risk { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.3); opacity: 0.75; } }
+        @keyframes cheer-pop { 0% { transform: scale(0.4); } 55% { transform: scale(1.35); } 100% { transform: scale(1); } }
+        .cheer-pop { animation: cheer-pop 0.35s cubic-bezier(0.34,1.56,0.64,1); }
         .flame-risk { animation: flame-risk 1.1s ease-in-out infinite; }
       `}</style>
 
@@ -1347,6 +1373,40 @@ function App({ householdId, household, onSignOut, authUserId }) {
             ))}
           </div>
 
+          {/* Sfida della settimana: gara leggera su una categoria che cambia ogni lunedì */}
+          {sfida && otherUser && (
+            <div className="slide-up" style={{ background: t.card, borderRadius: t.radius, padding: '16px', marginBottom: '16px', boxShadow: cardShadow, borderLeft: `4px solid ${t.sunny}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Trophy size={16} color={t.sunny} /> Sfida della settimana
+                </div>
+                <span style={{ fontSize: '11px', fontWeight: 800, color: t.textSoft, background: t.line, borderRadius: '10px', padding: '3px 8px' }}>
+                  {sfida.daysLeft === 0 ? 'ultimo giorno!' : `${sfida.daysLeft + 1} giorni`}
+                </span>
+              </div>
+              <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '10px' }}>
+                Chi fa più punti in <strong style={{ color: t.text }}>{sfida.category}</strong> entro domenica?
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {data.users.map((u) => {
+                  const mine = sfida.points[u.id] || 0;
+                  const other = sfida.points[data.users.find((x) => x.id !== u.id)?.id] || 0;
+                  const maxRef = Math.max(mine, other, 10);
+                  return (
+                    <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Avatar user={u} size={24} />
+                      <div style={{ flex: 1 }}>
+                        <BarFill pct={Math.max(4, (mine / maxRef) * 100)} height={8} color={u.color} track={t.line} />
+                      </div>
+                      <div className="display" style={{ fontSize: '14px', fontWeight: 800, color: t.text, minWidth: '30px', textAlign: 'right' }}>{mine}</div>
+                      {mine > other && <Crown size={13} color={t.sunny} fill={t.sunny} />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Obiettivo di coppia */}
           {coupleGoalProgress && (
             <div className="slide-up" style={{ background: t.card, borderRadius: '20px', padding: '16px', boxShadow: cardShadow, marginBottom: '16px', borderLeft: `4px solid ${t.lavender}` }}>
@@ -1414,6 +1474,9 @@ function App({ householdId, household, onSignOut, authUserId }) {
               const u = data.users.find((x) => x.id === e.userId);
               const info = choreNameForEntry(e, choresById);
               const dedUser = e.dedicatedTo ? data.users.find((x) => x.id === e.dedicatedTo) : null;
+              const cheers = Array.isArray(e.cheers) ? e.cheers : [];
+              const delPartner = me && e.userId !== me.id;   // lavoro dell'altro: posso applaudire
+              const applaudito = me && cheers.includes(me.id);
               return (
                 <div key={e.id} className="slide-up" style={{ background: t.card, borderRadius: '16px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: cardShadow, animationDelay: `${i * 0.03}s` }}>
                   <IconTile emoji={info.emoji} size={36} />
@@ -1422,6 +1485,19 @@ function App({ householdId, household, onSignOut, authUserId }) {
                     <div style={{ fontSize: '12px', color: t.textSoft, display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: u?.color, display: 'inline-block' }} /> {u?.name} · {formatTime(e.timestamp)}{dedUser ? ` · per ${dedUser.name}` : ''}</div>
                   </div>
                   <div style={{ fontWeight: 800, color: u?.color }} className="display">+{pointsForEntry(e, choresById)}</div>
+                  {delPartner ? (
+                    <button
+                      onClick={() => toggleCheer(e.id)}
+                      aria-label={applaudito ? 'Togli il bravo' : 'Fai i complimenti'}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '9px', margin: '-9px -4px -9px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '38px', minHeight: '38px' }}
+                    >
+                      <Heart size={18} color={t.coral} fill={applaudito ? t.coral : 'none'} className={applaudito ? 'cheer-pop' : undefined} />
+                    </button>
+                  ) : cheers.length > 0 && (
+                    <span title="Il tuo partner ti ha applaudito" style={{ display: 'flex', alignItems: 'center', gap: '3px', color: t.coral, fontSize: '12px', fontWeight: 800 }}>
+                      <Heart size={15} color={t.coral} fill={t.coral} className="cheer-pop" />
+                    </span>
+                  )}
                 </div>
               );
             })}

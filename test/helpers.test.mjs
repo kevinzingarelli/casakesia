@@ -1,6 +1,6 @@
 // Prove automatiche sulle funzioni di calcolo (nessun browser, nessun database).
 // Si lanciano con:  npm test
-import { pointsForEntry, recurringStatus, dedupeData } from '../src/helpers.js';
+import { pointsForEntry, recurringStatus, dedupeData, weeklyChallenge, todayStr, startOfWeek } from '../src/helpers.js';
 
 let pass = 0, fail = 0;
 function check(name, cond, extra) {
@@ -67,6 +67,28 @@ function check(name, cond, extra) {
   check('senza doppioni restituisce lo stesso oggetto (nessun lavoro inutile)', dedupeData(giaPulito) === giaPulito);
   check('voci senza id vengono conservate', dedupeData({ log: [{}, {}] }).log.length === 2);
   check('dati vuoti o strani non fanno esplodere nulla', dedupeData(null) === null && dedupeData({}).log === undefined);
+}
+
+// --- Sfida della settimana ---
+{
+  const monday = todayStr(startOfWeek());
+  const chores = { c1: { id: 'c1', points: 10, category: 'Cucina' }, c2: { id: 'c2', points: 5, category: 'Pulizia' } };
+  const users = [{ id: 'u1' }, { id: 'u2' }];
+  const cats = ['Cucina', 'Pulizia', 'Bucato'];
+  const log = [
+    { id: 'a', userId: 'u1', choreId: 'c1', date: monday, snapshotPoints: 10 },       // conta se la categoria è Cucina
+    { id: 'b', userId: 'u2', choreId: 'c2', date: monday, snapshotPoints: 5 },        // Pulizia
+    { id: 'c', userId: 'u1', choreId: 'c1', date: '2020-01-01', snapshotPoints: 10 }, // settimana vecchia: mai
+  ];
+  const s1 = weeklyChallenge(log, chores, cats, users);
+  const s2 = weeklyChallenge(log, chores, cats, users);
+  check('la sfida esiste con 2 utenti e categorie', !!s1);
+  check('stessa settimana → stessa categoria (deterministica)', s1.category === s2.category);
+  check('conta solo la settimana corrente', (s1.points.u1 + s1.points.u2) <= 15);
+  const attesi = s1.category === 'Cucina' ? { u1: 10, u2: 0 } : s1.category === 'Pulizia' ? { u1: 0, u2: 5 } : { u1: 0, u2: 0 };
+  check('punti giusti per la categoria estratta', s1.points.u1 === attesi.u1 && s1.points.u2 === attesi.u2, JSON.stringify(s1));
+  check('giorni rimasti fra 0 e 6', s1.daysLeft >= 0 && s1.daysLeft <= 6);
+  check('senza secondo utente niente sfida', weeklyChallenge(log, chores, cats, [{ id: 'u1' }]) === null);
 }
 
 console.log(`\n${pass} passati, ${fail} falliti`);

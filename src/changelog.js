@@ -7,9 +7,19 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '25';
+export const CURRENT_VERSION = '26';
 
 export const CHANGELOG = [
+  {
+    version: '26',
+    date: '2026-09-01',
+    time: '09:08',
+    title: 'Sfida della settimana e "Bravo!"',
+    items: [
+      'NUOVO — Sfida della settimana: ogni lunedì l\'app estrae una categoria (questa settimana tocca a una, la prossima a un\'altra) e vince chi ci fa più punti entro domenica. La card in Home mostra la gara in tempo reale',
+      'NUOVO — "Bravo!": sui lavori del partner nelle Ultime attività c\'è un cuoricino. Toccalo per fargli i complimenti: lo vede sul suo telefono e gli arriva una notifica. I complimenti ricevuti compaiono accanto ai tuoi lavori',
+    ],
+  },
   {
     version: '25',
     date: '2026-09-01',
