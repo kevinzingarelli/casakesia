@@ -7,9 +7,22 @@
 // vite.config.js), che è ciò che l'app confronta per accorgersi che sul
 // telefono sta girando una versione vecchia.
 
-export const CURRENT_VERSION = '24';
+export const CURRENT_VERSION = '25';
 
 export const CHANGELOG = [
+  {
+    version: '25',
+    date: '2026-09-01',
+    time: '09:03',
+    title: 'Meno rumore, condivisione più facile',
+    items: [
+      'Il codice d\'invito ora si CONDIVIDE con un tasto (WhatsApp o dove volete), sia appena creata la casa sia dalle Opzioni — prima si poteva solo copiare',
+      'Chi apre l\'app per la prima volta vede subito "Crea il tuo account" invece di un "Bentornato" rivolto a qualcun altro',
+      'Tolte le cose mai usate: l\'anteprima widget e il segnalibro delle citazioni (in un mese di uso vero, mai toccati). Meno voci, più chiarezza',
+      'Nei Regali, la sezione "richieste in corso" compare solo quando c\'è davvero qualcosa',
+      'L\'avviso sul ricalcolo dei punti compare solo nel momento in cui stai cambiando i punti di un lavoro, non sempre in cima alla lista',
+    ],
+  },
   {
     version: '24',
     date: '2026-09-01',

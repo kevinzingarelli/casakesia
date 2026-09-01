@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'rea
 import {
   Home, ListChecks, BarChart3, Settings, Plus, Minus, Flame, Trophy, Sparkles,
   Trash2, Check, Pencil, X, RotateCcw, Crown, Volume2, VolumeX, Moon, Sun, Download,
-  Calendar, Heart, Target, AlertTriangle, Palmtree, Share2, LayoutGrid, Clock, Zap,
-  Search, Gift, Bell, Repeat, Bookmark, Sparkle as SparkleIcon, Star, Music, Copy,
+  Calendar, Heart, Target, AlertTriangle, Palmtree, Share2, Clock, Zap,
+  Search, Gift, Bell, Repeat, Sparkle as SparkleIcon, Star, Music, Copy,
 } from 'lucide-react';
 import { supabase, TABLE } from './supabaseClient';
 import { AuthScreen, HouseholdSetupScreen, SplashScreen, NewPasswordScreen } from './Auth';
@@ -29,7 +29,6 @@ import { IconTile, Avatar, SectionTitle, EmptyState, hasIcon } from './icons';
 // grafici (recharts), che da sola pesa più di metà dell'app. Così il primo
 // avvio sul telefono scarica solo ciò che serve alla Home.
 const StatsView = lazy(() => import('./StatsView'));
-const WidgetScreen = lazy(() => import('./WidgetScreen'));
 const ShareCard = lazy(() => import('./ShareCard'));
 
 function LazyFallback({ t }) {
@@ -101,7 +100,6 @@ function App({ householdId, household, onSignOut, authUserId }) {
   const [choreSearch, setChoreSearch] = useState('');
   const [choreCat, setChoreCat] = useState('all');
   const [showRewards, setShowRewards] = useState(false);
-  const [showSavedQuotes, setShowSavedQuotes] = useState(false);
   const [removingIds, setRemovingIds] = useState([]);
   const [undoToast, setUndoToast] = useState(null); // { ids, label } — lavoro appena segnato, ancora annullabile
   const undoTimerRef = useRef(null);
@@ -841,12 +839,6 @@ function App({ householdId, household, onSignOut, authUserId }) {
   const deleteGiftRequest = (id) => save({ ...dataRef.current, giftRequests: (dataRef.current.giftRequests || []).filter((r) => r.id !== id) });
 
   // Citazioni salvate
-  const isQuoteSaved = (q) => (dataRef.current.savedQuotes || []).some((s) => s.text === q.text);
-  const toggleSaveQuote = (q) => {
-    const saved = dataRef.current.savedQuotes || [];
-    if (saved.some((s) => s.text === q.text)) save({ ...dataRef.current, savedQuotes: saved.filter((s) => s.text !== q.text) });
-    else save({ ...dataRef.current, savedQuotes: [{ ...q, savedAt: todayStr() }, ...saved] });
-  };
 
   // Ricorrenza lavori (giorni; 0/null = nessuna)
   const setChoreRecurrence = (id, days) => save({ ...dataRef.current, chores: dataRef.current.chores.map((c) => (c.id === id ? { ...c, recurrence: days ? { days: Number(days) } : null } : c)) });
@@ -952,7 +944,6 @@ function App({ householdId, household, onSignOut, authUserId }) {
   const health = houseHealth(data.log, choresById);
   const hState = houseState(health.score);
   const quote = quoteOfTheDay();
-  const quoteSaved = isQuoteSaved(quote);
   const motivation = me ? motivationalMessage(data.log, choresById, me.id, otherUser?.id, data.users) : null;
   const streakRisk = me && streaks[me.id] > 0 && !data.log.some((e) => e.userId === me.id && e.date === todayStr()) && new Date().getHours() >= 18;
 
@@ -1413,9 +1404,6 @@ function App({ householdId, household, onSignOut, authUserId }) {
               <div style={{ fontSize: '12px', fontStyle: 'italic', color: t.textSoft, lineHeight: 1.45 }}>"{quote.text}"</div>
               <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '4px', fontWeight: 700, opacity: 0.8 }}>— {quote.author}{quote.source ? `, ${quote.source}` : ''}</div>
             </div>
-            <button onClick={() => toggleSaveQuote(quote)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: quoteSaved ? t.coral : t.textSoft, flexShrink: 0, padding: '2px' }} title={quoteSaved ? 'Salvata' : 'Salva citazione'}>
-              <Bookmark size={17} fill={quoteSaved ? t.coral : 'none'} />
-            </button>
           </div>
 
           {/* Ultime attività */}
@@ -1441,18 +1429,6 @@ function App({ householdId, household, onSignOut, authUserId }) {
         </div>
       )}
 
-      {/* ===== WIDGET ===== */}
-      {tab === 'widget' && (
-        <div>
-          <div style={{ padding: '0 18px', marginBottom: '4px' }}>
-            <button onClick={() => setTab('settings')} style={{ background: 'none', border: 'none', padding: 0, color: t.coral, fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>← Opzioni</button>
-          </div>
-          <Suspense fallback={<LazyFallback t={t} />}>
-            <WidgetScreen data={data} choresById={choresById} totals={totals} streaks={streaks} me={me} t={t} dark={dark} health={health} />
-          </Suspense>
-        </div>
-      )}
-
       {/* ===== LAVORI ===== */}
       {tab === 'chores' && (
         <div className="fade-in" style={{ padding: '0 18px' }}>
@@ -1471,8 +1447,6 @@ function App({ householdId, household, onSignOut, authUserId }) {
               <button onClick={addChore} style={{ width: '100%', marginTop: '8px', background: t.mint, border: 'none', color: '#fff', borderRadius: '12px', padding: '10px', fontWeight: 700, cursor: 'pointer' }}>Aggiungi lavoro</button>
             </div>
           )}
-          <div style={{ fontSize: '11px', color: t.textSoft, marginBottom: '10px', background: t.card, borderRadius: t.radiusSm, padding: '10px 12px' }}>Cambiando i punti di un lavoro, <strong>tutto lo storico si ricalcola</strong> automaticamente.</div>
-
           {/* Ricerca */}
           <div style={{ position: 'relative', marginBottom: '10px' }}>
             <Search size={16} color={t.textSoft} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
@@ -1643,13 +1617,11 @@ function App({ householdId, household, onSignOut, authUserId }) {
           exportCSV={exportCSV} resetHistory={resetHistory} t={t} cardShadow={cardShadow} season={season}
           allCategories={allCategories} addCustomCategory={addCustomCategory} renameCategory={renameCategory} removeCategory={removeCategory} choresUsingCategory={choresUsingCategory}
           penaltiesOn={data.penaltiesOn} togglePenalties={togglePenalties} vacations={data.vacations} setVacation={setVacation}
-          onOpenRewards={() => setShowRewards(true)} onOpenSavedQuotes={() => setShowSavedQuotes(true)}
-          onOpenWidgetPreview={() => setTab('widget')}
+          onOpenRewards={() => setShowRewards(true)}
           soundPack={soundPack} setSoundPack={setSoundPack}
           onOpenNews={() => setShowNews(true)} unreadNews={unreadNews}
           pushSub={pushSub} pushBusy={pushBusy} pushMsg={pushMsg}
           onEnablePush={enablePush} onDisablePush={disablePush}
-          savedCount={(data.savedQuotes || []).length}
           household={household} onSignOut={onSignOut}
         />
       )}
@@ -1664,9 +1636,6 @@ function App({ householdId, household, onSignOut, authUserId }) {
       )}
 
       {/* Saved quotes modal */}
-      {showSavedQuotes && (
-        <SavedQuotesModal saved={data.savedQuotes || []} t={t} onRemove={(q) => toggleSaveQuote(q)} onClose={() => setShowSavedQuotes(false)} />
-      )}
 
       {/* Novità dell'app + invito ad aggiornare */}
       {showNews && <NewsModal t={t} dark={dark} onClose={() => setShowNews(false)} onReadChange={refreshUnread} />}
@@ -1801,7 +1770,7 @@ function ClaimNameScreen({ slot, t, dark, onConfirm }) {
   );
 }
 
-function SettingsView({ data, me, identity, setIdentity, updateUser, authBound, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, style, setStyle, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, renameCategory, removeCategory, choresUsingCategory, penaltiesOn, togglePenalties, vacations, setVacation, onOpenRewards, onOpenSavedQuotes, savedCount, onOpenWidgetPreview, soundPack, setSoundPack, onOpenNews, unreadNews, pushSub, pushBusy, pushMsg, onEnablePush, onDisablePush, household, onSignOut }) {
+function SettingsView({ data, me, identity, setIdentity, updateUser, authBound, soundOn, setSoundOn, dark, setDark, seasonal, setSeasonal, style, setStyle, exportCSV, resetHistory, t, cardShadow, season, allCategories, addCustomCategory, renameCategory, removeCategory, choresUsingCategory, penaltiesOn, togglePenalties, vacations, setVacation, onOpenRewards, soundPack, setSoundPack, onOpenNews, unreadNews, pushSub, pushBusy, pushMsg, onEnablePush, onDisablePush, household, onSignOut }) {
   const [newCat, setNewCat] = useState('');
   const [codeCopied, setCodeCopied] = useState(false);
   const customCats = data.customCategories || [];
@@ -1823,6 +1792,14 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, authBound, 
                   <div className="display" style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '4px', color: t.text }}>{household.inviteCode || '—'}</div>
                   {codeCopied ? <Check size={16} color={t.mint} /> : <Copy size={16} color={t.textSoft} />}
                 </div>
+                <button
+                  onClick={() => {
+                    const msg = `Unisciti alla nostra casa su Casa Points! Codice d'invito: ${household.inviteCode} — https://casakesia.vercel.app`;
+                    if (navigator.share) navigator.share({ text: msg }).catch(() => {});
+                    else navigator.clipboard?.writeText(msg).then(() => { setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2000); }).catch(() => {});
+                  }}
+                  style={{ width: '100%', background: t.coral, border: 'none', borderRadius: '12px', padding: '12px', color: '#fff', fontWeight: 800, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '12px' }}
+                ><Share2 size={16} /> Condividi con il tuo partner</button>
               </>
             ) : (
               <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '12px' }}>Voi due siete collegati alla stessa casa.</div>
@@ -1945,12 +1922,6 @@ function SettingsView({ data, me, identity, setIdentity, updateUser, authBound, 
       <div className="display" style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: t.text }}>Extra</div>
       <button onClick={onOpenRewards} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '10px', boxShadow: cardShadow }}>
         <Gift size={18} color={t.lavender} /> Gestisci ricompense <span style={{ marginLeft: 'auto', color: t.textSoft, fontSize: '12px' }}>{(data.rewards || []).length}</span>
-      </button>
-      <button onClick={onOpenSavedQuotes} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '10px', boxShadow: cardShadow }}>
-        <Bookmark size={18} color={t.coral} /> Citazioni salvate <span style={{ marginLeft: 'auto', color: t.textSoft, fontSize: '12px' }}>{savedCount}</span>
-      </button>
-      <button onClick={onOpenWidgetPreview} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '10px', boxShadow: cardShadow }}>
-        <LayoutGrid size={18} color={t.lavender} /> Anteprima widget
       </button>
       <button onClick={onOpenNews} style={{ width: '100%', background: t.card, border: 'none', color: t.text, borderRadius: t.radiusSm, padding: '14px', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '20px', boxShadow: cardShadow }}>
         <Bell size={18} color={t.sunny} /> Novità dell'app
@@ -2128,6 +2099,13 @@ function ChoreRow({ chore, editing, onEdit, onSave, onDelete, onLog, onLogSubtas
           <input type="number" min="1" value={draft.points} onChange={(e) => setDraft({ ...draft, points: Math.max(1, Number(e.target.value) || 0) })} style={{ flex: 1, padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px' }} />
           <select value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} style={{ flex: 1, padding: '10px', borderRadius: '12px', border: `1px solid ${t.line}`, fontSize: '14px' }}>{(categories || CATEGORIES).map((c) => <option key={c}>{c}</option>)}</select>
         </div>
+        {/* L'avviso sul ricalcolo compare SOLO quando i punti sono stati toccati:
+            prima era una card fissa in cima alla lista, rumore per tutti sempre */}
+        {draft.points !== chore.points && (
+          <div style={{ fontSize: '11px', color: t.textSoft, marginTop: '8px', background: t.line, borderRadius: '8px', padding: '8px 10px' }}>
+            Cambiando i punti, tutto lo storico di questo lavoro si ricalcola col valore nuovo.
+          </div>
+        )}
         {/* Ricorrenza */}
         <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '12px', color: t.textSoft, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}><Repeat size={14} /> Ricorrenza:</span>
@@ -2317,33 +2295,6 @@ function RewardsModal({ rewards, ctx, users, identity, t, onAdd, onRemove, onCla
 // ============================================================
 // MODALE CITAZIONI SALVATE
 // ============================================================
-function SavedQuotesModal({ saved, t, onRemove, onClose }) {
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(45,42,74,0.5)', zIndex: 60, display: 'flex', alignItems: 'flex-end' }} onClick={onClose}>
-      <div className="pop-card" style={{ background: t.card, width: '100%', borderRadius: '28px 28px 0 0', padding: '24px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))', maxHeight: '85vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-          <div className="display" style={{ fontSize: '20px', fontWeight: 800, color: t.text, display: 'flex', alignItems: 'center', gap: '8px' }}><Bookmark size={20} color={t.coral} /> Citazioni salvate</div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: t.textSoft, cursor: 'pointer' }}><X size={22} /></button>
-        </div>
-        {saved.length === 0 ? (
-          <EmptyState icon={Bookmark} gradient="purple" title="Nessuna citazione salvata" subtitle="Tocca il segnalibro sulla citazione del giorno per salvarla" t={t} />
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {saved.map((q, i) => (
-              <div key={i} style={{ background: t.style === 'minimal' ? 'transparent' : `${t.lavender}11`, border: `1px solid ${t.line}`, borderRadius: t.radiusSm, padding: '14px', borderLeft: `4px solid ${t.lavender}`, display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '14px', fontStyle: 'italic', color: t.text, lineHeight: 1.5 }}>"{q.text}"</div>
-                  <div style={{ fontSize: '12px', color: t.textSoft, marginTop: '6px', fontWeight: 700 }}>— {q.author}{q.source ? `, ${q.source}` : ''}</div>
-                </div>
-                <button onClick={() => onRemove(q)} style={{ background: 'transparent', border: 'none', color: t.coral, cursor: 'pointer', flexShrink: 0 }}><Trash2 size={16} /></button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ============================================================================
 // Guscio autenticazione: prima di mostrare l'app vera e propria, verifica

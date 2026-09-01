@@ -157,18 +157,16 @@ export default function GiftsView({
         </>
       )}
 
-      {/* ---- Le mie richieste ---- */}
-      {sectionTitle('I miei regali richiesti', <Sparkles size={16} color={t.lavender} />)}
-      {mine.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', padding: '20px', color: t.textSoft, fontSize: '13px' }}>
-          Non hai richieste in corso. Scegline uno dal catalogo qui sotto 👇
-        </div>
-      ) : (
-        mine.map((r) => (
-          <RequestRow key={r.id} r={r}>
-            <button onClick={() => onDeleteRequest(r.id)} style={{ ...btn('transparent', t.textSoft), flex: 'none', padding: '8px' }}><Trash2 size={15} /> Ritira</button>
-          </RequestRow>
-        ))
+      {/* ---- Le mie richieste: solo quando esistono, la card vuota era rumore ---- */}
+      {mine.length > 0 && (
+        <>
+          {sectionTitle('I miei regali richiesti', <Sparkles size={16} color={t.lavender} />)}
+          {mine.map((r) => (
+            <RequestRow key={r.id} r={r}>
+              <button onClick={() => onDeleteRequest(r.id)} style={{ ...btn('transparent', t.textSoft), flex: 'none', padding: '8px' }}><Trash2 size={15} /> Ritira</button>
+            </RequestRow>
+          ))}
+        </>
       )}
 
       {/* ---- Catalogo ---- */}

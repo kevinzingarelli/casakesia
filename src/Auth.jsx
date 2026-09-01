@@ -61,7 +61,11 @@ export function SplashScreen() {
 }
 
 export function AuthScreen() {
-  const [mode, setMode] = useState('login'); // 'login' | 'signup' | 'reset'
+  // Chi ha già usato l'app su questo dispositivo vede "Accedi"; un visitatore
+  // nuovo vede la registrazione in primo piano (prima era un link piccolo
+  // sotto un "Bentornato" rivolto a qualcuno che qui non c'era mai stato).
+  const giaVisto = (() => { try { return !!localStorage.getItem('casa-points-registrato'); } catch (e) { return true; } })();
+  const [mode, setMode] = useState(giaVisto ? 'login' : 'signup'); // 'login' | 'signup' | 'reset'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -102,6 +106,7 @@ export function AuthScreen() {
         const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (err) throw err;
       }
+      try { localStorage.setItem('casa-points-registrato', '1'); } catch (e) { /* niente */ }
     } catch (err) {
       setError(err.message === 'Invalid login credentials' ? 'Email o password sbagliati.' : (err.message || 'Qualcosa è andato storto.'));
     } finally {
@@ -246,6 +251,12 @@ export function HouseholdSetupScreen() {
             {copied ? <Check size={18} color={t.mint} /> : <Copy size={18} color={t.textSoft} />}
           </div>
           <div style={{ fontSize: '12px', color: t.textSoft, marginBottom: '16px' }}>Lo trovi anche più tardi in Opzioni, se ora non hai modo di condividerlo.</div>
+          {typeof navigator !== 'undefined' && navigator.share && (
+            <button
+              onClick={() => navigator.share({ text: `Unisciti alla nostra casa su Casa Points! Codice d'invito: ${created.invite_code} — https://casakesia.vercel.app` }).catch(() => {})}
+              style={{ width: '100%', background: t.card, border: `2px solid ${t.coral}`, borderRadius: t.radiusSm, padding: '12px', color: t.coral, fontWeight: 800, fontSize: '14px', cursor: 'pointer', marginBottom: '10px' }}
+            >Condividi su WhatsApp o dove vuoi</button>
+          )}
           <PrimaryButton onClick={() => window.location.reload()}>Continua <ArrowRight size={17} /></PrimaryButton>
         </div>
       </Shell>
